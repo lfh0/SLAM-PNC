@@ -1,0 +1,65 @@
+lio:
+  # Map settings
+  map:
+    save_map: false
+    if_filter: false
+    save_map_dir: "map"
+    map_name: "map.pcd"
+    ds_size: 0.3
+    save_interval: 500    # -1 stores all frames directly (may cause excessive memory usage).
+                          # Values > 0 save one frame every N frames, then merge at the end.
+
+  # ROS Topic input
+  ros:
+    lidar_topic: "/hesai_front/pandar"
+    imu_topic: "/imu/data"
+
+  # Sensor Configuration
+  sensor:
+    lidar_type: 2
+    blind: 2.0
+    maxrange: 150.0
+    filter_rate: 3.0
+    enable_downsample: true
+    voxel_fliter_size: 0.5
+    gravity_norm: 9.7946
+    imu_type: 1
+    imu_na: 0.1
+    imu_ng: 0.1
+    imu_nba: 0.0001
+    imu_nbg: 0.0001
+
+  extrinsic:
+    lidar_imu: [0.0, 0.0, 0.0,
+                1.0, 0.0, 0.0, 
+                0.0, 1.0, 0.0, 
+                0.0, 0.0, 1.0]
+    odom_robo: [0.0, 0, 0, 0.0, 0.0, 0.0]    # Transform from odom to robot frame.
+                                             # The odom frame is directly attached to the IMU frame.
+                                             # NOTE: The inverse of this transform is applied in the code.
+
+
+  # Vox hash Map
+  hash_map:
+    hash_capacity: 100000000
+    vox_resolution: 0.5
+
+  # Kalman Filter Parameters
+  kf:
+    kf_type: 0
+    kf_max_iterations: 4
+    kf_align_gravity: true
+    kf_quit_eps: 0.001
+
+  # output
+  output:
+    robot:  false          # Publish pose for the mavros.
+    plan_env_world: false
+    plan_env_body:  false
+    planner: false         # Only publish point cloud data. This parameter is gradually deprecated.
+    map:    true           # Visualize point cloud data
+    dense:  true
+    pub_step: 10           # Control the frequency of point cloud visualization to save TCP bandwidth
+
+  eva:
+    timer: true

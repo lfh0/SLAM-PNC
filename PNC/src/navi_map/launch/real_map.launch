@@ -1,0 +1,17 @@
+<launch>
+
+    <node pkg="octomap_server" type="octomap_server_node" name="octomap_server" output="screen">
+        <param name="resolution" value="0.05" />
+        <param name="frame_id" value="map" />
+        <param name="base_frame_id" value="imu" />
+        <param name="pointcloud_min_z" value="-3.6" />
+        <param name="pointcloud_max_z" value="6" />
+        <param name="latch" value="true" />
+        <!-- 上述输入后以地面为occupancy_z的0点进行下面的高度裁剪 -->
+        <param name="occupancy_min_z" value="-3.6"/>
+        <param name="occupancy_max_z" value="6"/>
+        <remap from="/cloud_in" to="/lio/cloud_imu" />
+    </node>
+
+    <node pkg="rviz" type="rviz" name="rviz_map" args="-d $(find navi_map)/rviz/map_maintain.rviz" />
+</launch>

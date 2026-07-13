@@ -1,0 +1,172 @@
+mission_points:
+  - id: 0
+    point:
+      - 9.957417
+      - -0.1092546
+      - 0.08145227
+    isStop: true
+    conPts:
+      - 1
+  - id: 1
+    point:
+      - 14.73855
+      - -0.0670625
+      - -0.06532744
+    isStop: true
+    conPts:
+      - 0
+      - 2
+  - id: 2
+    point:
+      - 20.35232
+      - -0.3625244
+      - -0.06241873
+    isStop: true
+    conPts:
+      - 1
+      - 3
+
+  - id: 3
+    point:
+      - 23.63194
+      - -2.844402
+      - -1.303579
+    isStop: true
+    conPts:
+      - 2
+      - 4
+  - id: 4
+    point:
+      - 24.51833
+      - -8.221804
+      - -1.515298
+    isStop: true
+    conPts:
+      - 3
+      - 5
+  - id: 5
+    point:
+      - 24.44189
+      - -12.58741
+      - -1.55169
+    isStop: true
+    conPts:
+      - 4
+      - 6
+  - id: 6
+    point:
+      - 24.09851
+      - -19.49321
+      - -1.439481
+    isStop: true
+    conPts:
+      - 5
+      - 7
+
+  - id: 7
+    point:
+      - 24.02221
+      - -24.0335
+      - -1.809042
+    isStop: true
+    conPts:
+      - 6
+      - 8
+
+  - id: 8
+    point:
+      - 20.28315
+      - -24.98734
+      - 3.108818
+    isStop: true
+    conPts:
+      - 7
+      - 9
+
+  - id: 9
+    point:
+      - 14.67457
+      - -25.2544
+      - -3.06155
+    isStop: true
+    conPts:
+      - 8
+      - 10
+
+  - id: 10
+    point:
+      - 6.586003
+      - -25.2544
+      - -3.11272
+    isStop: true
+    conPts:
+      - 9
+      - 11
+
+  - id: 11
+    point:
+      - -3.996418
+      - -25.06625
+      - 3.062006
+    isStop: true
+    conPts:
+      - 10
+      - 12
+
+  - id: 12
+    point:
+      - -11.974
+      - -23.80892
+      - 1.793052
+    isStop: true
+    conPts:
+      - 11
+      - 13
+
+  - id: 13
+    point:
+      - -12.75441
+      - -19.12643
+      - 1.629064
+    isStop: true
+    conPts:
+      - 12
+      - 14
+  - id: 14
+    point:
+      - -13.31804
+      - -13.36003
+      - 1.539557
+    isStop: true
+    conPts:
+      - 13
+      - 15
+
+  - id: 15
+    point:
+      - -13.31804
+      - -9.544672
+      - 1.530818
+    isStop: true
+    conPts:
+      - 14
+      - 16
+
+  - id: 16
+    point:
+      - -11.93064
+      - -4.775469
+      - 1.089909
+    isStop: true
+    conPts:
+      - 15
+      - 17
+
+  - id: 17
+    point:
+      - -8.987151
+      - -0.6592073
+      - 1.041207
+    isStop: true
+    conPts:
+      - 16

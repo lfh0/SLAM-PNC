@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+
+<launch>
+    <arg name="start_costmap" default="true" />
+
+    <group if="$(arg start_costmap)">
+        <include file="$(find navi_map)/launch/global_inflation_local_obstacle.launch" />
+    </group>
+
+    <rosparam command="load" file="$(find front2end_search)/config/navigation.yaml" />
+
+    <node name="rviz_search" pkg="rviz" type="rviz" required="true" args="-d $(find navi_map)/rviz/navi_2d.rviz" />     
+
+    <node name="planning_server" pkg="front2end_search" type="planning_server" output="screen">
+        <param name="Vel" value= "3.0" />
+        <param name="Length" value= "2.054"/>
+        <param name="v_max" value="5.0"/>
+        <param name="freq" value="20"/>
+        <param name="limit_v_and_kesi" value="true"/>
+        <rosparam param="Q_set"> [1.0,1.0,1.0] </rosparam><!--State weight matrix Q = diag{Q1,Q2,Q3},please set Q<R-->
+        <rosparam param="R_set"> [3.0,3.0] </rosparam><!--Control input weight matrix R = diag{R1,R2},please set Q<R-->
+    </node>
+
+
+</launch>

@@ -1,0 +1,17 @@
+<launch>
+
+  <arg name="rviz" default="false" />
+
+  <rosparam file="$(find super_lio)/config/relocation.yaml" command="load"/>
+
+  <node pkg="super_lio" type="static_tf_from_params.py" name="static_tf_from_params" output="screen"/>
+
+  <!-- Launch Nodes -->
+  <node pkg="super_lio" type="relocation_node" name="relocation_node" output="screen"/>
+
+  <!-- Optional RViz -->
+  <group if="$(arg rviz)">
+		<node pkg="rviz" type="rviz" name="rviz" args="-d $(find super_lio)/rviz/relocation.rviz" />
+	</group>
+  
+</launch>

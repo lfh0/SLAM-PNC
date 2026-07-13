@@ -1,0 +1,18 @@
+<launch>
+
+  <arg name="rviz" default="true" />
+
+  <rosparam file="$(find super_lio)/config/livox_360.yaml" command="load"/>
+
+  <node pkg="super_lio" type="static_tf_from_params.py" name="static_tf_from_params" output="screen"/>
+
+  <!-- Launch Nodes -->
+  <node pkg="super_lio" type="super_lio_node" name="super_lio_node" output="screen"/>
+
+  <!-- Optional RViz -->
+  <group if="$(arg rviz)">
+		<node pkg="rviz" type="rviz" name="super_lio" args="-d $(find super_lio)/rviz/lio.rviz" />
+	</group>
+
+
+</launch>

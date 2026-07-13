@@ -1,0 +1,548 @@
+Panels:
+  - Class: rviz/Displays
+    Help Height: 138
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1/Fixed Frame1
+        - /Global Options1/Background Color1
+        - /Global Options1/Frame Rate1
+        - /Global Options1/Default Light1
+        - /Grid1/Reference Frame1
+        - /Grid1/Plane Cell Count1
+        - /Grid1/Normal Cell Count1
+        - /Grid1/Cell Size1
+        - /Grid1/Line Style1
+        - /Grid1/Line Style1/Line Width1
+        - /Grid1/Color1
+        - /Grid1/Alpha1
+        - /Grid1/Plane1
+        - /Grid1/Offset1
+        - /Grid1/Offset1/X1
+        - /Grid1/Offset1/Y1
+        - /Grid1/Offset1/Z1
+        - /Axes1/Reference Frame1
+        - /Axes1/Length1
+        - /Axes1/Radius1
+        - /Axes1/Show Trail1
+        - /Axes1/Alpha1
+        - /map1/Topic1
+        - /map1/Unreliable1
+        - /map1/Queue Size1
+        - /map1/Selectable1
+        - /map1/Style1
+        - /map1/Size (m)1
+        - /map1/Size (Pixels)1
+        - /map1/Alpha1
+        - /map1/Decay Time1
+        - /map1/Position Transformer1
+        - /map1/Color Transformer1
+        - /map1/Axis1
+        - /map1/Autocompute Value Bounds1
+        - /map1/Autocompute Value Bounds1/Min Value1
+        - /map1/Autocompute Value Bounds1/Max Value1
+        - /map1/Use Fixed Frame1
+        - /map1/Color1
+        - /map1/Channel Name1
+        - /map1/Use rainbow1
+        - /map1/Invert Rainbow1
+        - /map1/Min Color1
+        - /map1/Max Color1
+        - /map1/Autocompute Intensity Bounds1
+        - /map1/Min Intensity1
+        - /map1/Max Intensity1
+        - /current1/Topic1
+        - /current1/Unreliable1
+        - /current1/Queue Size1
+        - /current1/Selectable1
+        - /current1/Style1
+        - /current1/Size (m)1
+        - /current1/Size (Pixels)1
+        - /current1/Alpha1
+        - /current1/Decay Time1
+        - /current1/Position Transformer1
+        - /current1/Color Transformer1
+        - /current1/Axis1
+        - /current1/Autocompute Value Bounds1
+        - /current1/Autocompute Value Bounds1/Min Value1
+        - /current1/Autocompute Value Bounds1/Max Value1
+        - /current1/Use Fixed Frame1
+        - /current1/Color1
+        - /current1/Channel Name1
+        - /current1/Use rainbow1
+        - /current1/Invert Rainbow1
+        - /current1/Min Color1
+        - /current1/Max Color1
+        - /current1/Autocompute Intensity Bounds1
+        - /current1/Min Intensity1
+        - /current1/Max Intensity1
+        - /lidar_odom1/Odometry1/Topic1
+        - /lidar_odom1/Odometry1/Unreliable1
+        - /lidar_odom1/Odometry1/Queue Size1
+        - /lidar_odom1/Odometry1/Position Tolerance1
+        - /lidar_odom1/Odometry1/Angle Tolerance1
+        - /lidar_odom1/Odometry1/Keep1
+        - /lidar_odom1/Odometry1/Shape1
+        - /lidar_odom1/Odometry1/Shape1/Color1
+        - /lidar_odom1/Odometry1/Shape1/Alpha1
+        - /lidar_odom1/Odometry1/Shape1/Shaft Length1
+        - /lidar_odom1/Odometry1/Shape1/Shaft Radius1
+        - /lidar_odom1/Odometry1/Shape1/Head Length1
+        - /lidar_odom1/Odometry1/Shape1/Head Radius1
+        - /lidar_odom1/Odometry1/Shape1/Axes Length1
+        - /lidar_odom1/Odometry1/Shape1/Axes Radius1
+        - /lidar_odom1/Odometry1/Covariance1/Position1
+        - /lidar_odom1/Odometry1/Covariance1/Position1/Color1
+        - /lidar_odom1/Odometry1/Covariance1/Position1/Alpha1
+        - /lidar_odom1/Odometry1/Covariance1/Position1/Scale1
+        - /lidar_odom1/Odometry1/Covariance1/Orientation1
+        - /lidar_odom1/Odometry1/Covariance1/Orientation1/Frame1
+        - /lidar_odom1/Odometry1/Covariance1/Orientation1/Color Style1
+        - /lidar_odom1/Odometry1/Covariance1/Orientation1/Color1
+        - /lidar_odom1/Odometry1/Covariance1/Orientation1/Alpha1
+        - /lidar_odom1/Odometry1/Covariance1/Orientation1/Offset1
+        - /lidar_odom1/Odometry1/Covariance1/Orientation1/Scale1
+        - /robo_odom1/Pose1/Topic1
+        - /robo_odom1/Pose1/Unreliable1
+        - /robo_odom1/Pose1/Queue Size1
+        - /robo_odom1/Pose1/Shape1
+        - /robo_odom1/Pose1/Color1
+        - /robo_odom1/Pose1/Alpha1
+        - /robo_odom1/Pose1/Shaft Length1
+        - /robo_odom1/Pose1/Shaft Radius1
+        - /robo_odom1/Pose1/Head Length1
+        - /robo_odom1/Pose1/Head Radius1
+        - /robo_odom1/Pose1/Axes Length1
+        - /robo_odom1/Pose1/Axes Radius1
+        - /robo_odom1/Odometry1/Topic1
+        - /robo_odom1/Odometry1/Unreliable1
+        - /robo_odom1/Odometry1/Queue Size1
+        - /robo_odom1/Odometry1/Position Tolerance1
+        - /robo_odom1/Odometry1/Angle Tolerance1
+        - /robo_odom1/Odometry1/Keep1
+        - /robo_odom1/Odometry1/Shape1
+        - /robo_odom1/Odometry1/Shape1/Color1
+        - /robo_odom1/Odometry1/Shape1/Alpha1
+        - /robo_odom1/Odometry1/Shape1/Shaft Length1
+        - /robo_odom1/Odometry1/Shape1/Shaft Radius1
+        - /robo_odom1/Odometry1/Shape1/Head Length1
+        - /robo_odom1/Odometry1/Shape1/Head Radius1
+        - /robo_odom1/Odometry1/Shape1/Axes Length1
+        - /robo_odom1/Odometry1/Shape1/Axes Radius1
+        - /robo_odom1/Odometry1/Covariance1
+        - /robo_odom1/Odometry1/Covariance1/Position1
+        - /robo_odom1/Odometry1/Covariance1/Position1/Color1
+        - /robo_odom1/Odometry1/Covariance1/Position1/Alpha1
+        - /robo_odom1/Odometry1/Covariance1/Position1/Scale1
+        - /robo_odom1/Odometry1/Covariance1/Orientation1
+        - /robo_odom1/Odometry1/Covariance1/Orientation1/Frame1
+        - /robo_odom1/Odometry1/Covariance1/Orientation1/Color Style1
+        - /robo_odom1/Odometry1/Covariance1/Orientation1/Color1
+        - /robo_odom1/Odometry1/Covariance1/Orientation1/Alpha1
+        - /robo_odom1/Odometry1/Covariance1/Orientation1/Offset1
+        - /robo_odom1/Odometry1/Covariance1/Orientation1/Scale1
+        - /robo_odom1/Path1
+        - /Marker1
+      Splitter Ratio: 0.3619271516799927
+    Tree Height: 1699
+  - Class: rviz/Selection
+    Name: Selection
+  - Class: rviz/Tool Properties
+    Expanded:
+      - /2D Pose Estimate1
+      - /Publish Point1
+      - /2D Nav Goal1
+    Name: Tool Properties
+    Splitter Ratio: 0.5886790156364441
+  - Class: rviz/Views
+    Expanded:
+      - /Current View1
+      - /Orbit1
+    Name: Views
+    Splitter Ratio: 0.5
+  - Class: rviz/Time
+    Name: Time
+    SyncMode: 0
+    SyncSource: map
+Preferences:
+  PromptSaveOnExit: true
+Toolbars:
+  toolButtonStyle: 2
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 100
+      Class: rviz/Grid
+      Color: 160; 160; 164
+      Enabled: false
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 100
+      Reference Frame: world
+      Value: false
+    - Alpha: 1
+      Class: rviz/Axes
+      Enabled: true
+      Length: 1000
+      Name: Axes
+      Radius: 0.10000000149011612
+      Reference Frame: world
+      Show Trail: false
+      Value: true
+    - Alpha: 1
+      Class: rviz/Axes
+      Enabled: true
+      Length: 1000
+      Name: Axes
+      Radius: 0.10000000149011612
+      Reference Frame: map
+      Show Trail: false
+      Value: true
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 41.87890625
+        Min Value: -64.01126098632812
+        Value: true
+      Axis: X
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 0; 140
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: true
+      Max Color: 7; 84; 101
+      Min Color: 204; 238; 230
+      Name: map
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Points
+      Topic: /lio/global_map
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 20.33018684387207
+        Min Value: -18.37679672241211
+        Value: true
+      Axis: Y
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: true
+      Max Color: 191; 64; 64
+      Min Color: 255; 0; 175
+      Name: current
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Points
+      Topic: /lio/cloud_world
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 20.33018684387207
+        Min Value: -18.37679672241211
+        Value: true
+      Axis: Y
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: true
+      Max Color: 191; 64; 64
+      Min Color: 255; 0; 175
+      Name: orin_lidar
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 5
+      Size (m): 0.009999999776482582
+      Style: Points
+      Topic: /lio/cloud_imu
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz/Group
+      Displays:
+        - Angle Tolerance: 0
+          Class: rviz/Odometry
+          Covariance:
+            Orientation:
+              Alpha: 0.5
+              Color: 255; 255; 127
+              Color Style: Unique
+              Frame: Local
+              Offset: 1
+              Scale: 1
+              Value: true
+            Position:
+              Alpha: 0.30000001192092896
+              Color: 204; 51; 204
+              Scale: 1
+              Value: true
+            Value: true
+          Enabled: true
+          Keep: 1
+          Name: Odometry
+          Position Tolerance: 0
+          Queue Size: 10
+          Shape:
+            Alpha: 1
+            Axes Length: 0.5
+            Axes Radius: 0.20000000298023224
+            Color: 255; 25; 0
+            Head Length: 0.30000001192092896
+            Head Radius: 0.10000000149011612
+            Shaft Length: 0.5
+            Shaft Radius: 0.05000000074505806
+            Value: Arrow
+          Topic: /lio/odom
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Class: rviz/Axes
+          Enabled: true
+          Length: 0.5
+          Name: Axes
+          Radius: 0.20000000298023224
+          Reference Frame: imu
+          Show Trail: false
+          Value: true
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 0; 106; 255
+          Enabled: true
+          Head Diameter: 0.30000001192092896
+          Head Length: 0.20000000298023224
+          Length: 0.30000001192092896
+          Line Style: Billboards
+          Line Width: 0.10000000149011612
+          Name: Path
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Color: 255; 85; 255
+          Pose Style: None
+          Queue Size: 10
+          Radius: 0.029999999329447746
+          Shaft Diameter: 0.10000000149011612
+          Shaft Length: 0.10000000149011612
+          Topic: /lio/path
+          Unreliable: false
+          Value: true
+      Enabled: false
+      Name: lidar_odom
+    - Class: rviz/Group
+      Displays:
+        - Alpha: 1
+          Axes Length: 0.5
+          Axes Radius: 0.05000000074505806
+          Class: rviz/Pose
+          Color: 173; 127; 168
+          Enabled: true
+          Head Length: 0.30000001192092896
+          Head Radius: 0.10000000149011612
+          Name: Pose
+          Queue Size: 10
+          Shaft Length: 0.30000001192092896
+          Shaft Radius: 0.05000000074505806
+          Shape: Arrow
+          Topic: /mavros/vision_pose/pose
+          Unreliable: false
+          Value: true
+        - Angle Tolerance: 0
+          Class: rviz/Odometry
+          Covariance:
+            Orientation:
+              Alpha: 0.5
+              Color: 255; 255; 127
+              Color Style: Unique
+              Frame: Local
+              Offset: 1
+              Scale: 1
+              Value: true
+            Position:
+              Alpha: 0.30000001192092896
+              Color: 204; 51; 204
+              Scale: 1
+              Value: true
+            Value: true
+          Enabled: true
+          Keep: 1
+          Name: Odometry
+          Position Tolerance: 0
+          Queue Size: 10
+          Shape:
+            Alpha: 1
+            Axes Length: 0.30000001192092896
+            Axes Radius: 0.10000000149011612
+            Color: 255; 25; 0
+            Head Length: 0.30000001192092896
+            Head Radius: 0.10000000149011612
+            Shaft Length: 0.5
+            Shaft Radius: 0.05000000074505806
+            Value: Arrow
+          Topic: /lio/robo/odom
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Class: rviz/Axes
+          Enabled: true
+          Length: 0.30000001192092896
+          Name: Axes
+          Radius: 0.10000000149011612
+          Reference Frame: robot
+          Show Trail: false
+          Value: true
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 255; 25; 0
+          Enabled: true
+          Head Diameter: 0.30000001192092896
+          Head Length: 0.20000000298023224
+          Length: 0.30000001192092896
+          Line Style: Billboards
+          Line Width: 0.10000000149011612
+          Name: Path
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Color: 255; 85; 255
+          Pose Style: None
+          Queue Size: 10
+          Radius: 0.029999999329447746
+          Shaft Diameter: 0.10000000149011612
+          Shaft Length: 0.10000000149011612
+          Topic: /lio/path_robot
+          Unreliable: false
+          Value: true
+      Enabled: true
+      Name: robo_odom
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /lio/danger_box
+      Name: Marker
+      Namespaces:
+        lidar_repub: true
+      Queue Size: 1
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 0; 0; 0
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+      Hide Inactive Objects: true
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/SetInitialPose
+      Theta std deviation: 0.2617993950843811
+      Topic: /initialpose
+      X std deviation: 0.5
+      Y std deviation: 0.5
+    - Class: rviz/PublishPoint
+      Single click: true
+      Topic: /clicked_point
+    - Class: rviz/SetGoal
+      Topic: goal
+    - Class: jsk_rviz_plugin/OpenAll
+  Value: true
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 22.331666946411133
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Field of View: 0.7853981852531433
+      Focal Point:
+        X: 0.9839261174201965
+        Y: 0.43056032061576843
+        Z: 4.0117011070251465
+      Focal Shape Fixed Size: false
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 1.0847969055175781
+      Target Frame: robot
+      Yaw: 5.525379657745361
+    Saved:
+      - Class: rviz/Orbit
+        Distance: 0.01378068421036005
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Field of View: 0.7853981852531433
+        Focal Point:
+          X: 1.829602599143982
+          Y: -4.039397239685059
+          Z: 10.332056999206543
+        Focal Shape Fixed Size: false
+        Focal Shape Size: 0.05000000074505806
+        Invert Z Axis: false
+        Name: Orbit
+        Near Clip Distance: 0.009999999776482582
+        Pitch: 1.1597967147827148
+        Target Frame: robot
+        Yaw: 4.78661584854126
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 2032
+  Hide Left Dock: false
+  Hide Right Dock: true
+  QMainWindow State: 000000ff00000000fd0000000400000000000003550000079bfc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b000000b000fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000b0fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c00610079007301000000270000079b0000018200fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c0000026100000001000002a70000050afc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a0056006900650077007300000000270000050a0000013200fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e1000001970000000300000a000000003efc0100000002fb0000000800540069006d0065000000000000000a000000077d00fffffffb0000000800540069006d0065010000000000000450000000000000000000000b0f0000079b00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730000000000ffffffff0000000000000000
+  Selection:
+    collapsed: false
+  Time:
+    collapsed: false
+  Tool Properties:
+    collapsed: false
+  Views:
+    collapsed: true
+  Width: 3696
+  X: 144
+  Y: 54

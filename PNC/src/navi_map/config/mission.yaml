@@ -1,0 +1,17 @@
+mission_points:
+  - id: 0
+    point:
+      - -0.9272927
+      - -0.7335505
+      - 1.652409
+    isStop: true
+    conPts:
+      - 1
+  - id: 1
+    point:
+      - -6.540956
+      - 10.74051
+      - 1.525373
+    isStop: true
+    conPts:
+      - 0

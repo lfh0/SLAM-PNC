@@ -1,0 +1,8 @@
+<launch>
+
+    <rosparam file="$(find navi_map)/config/sim.yaml" command="load"/>
+
+    <node pkg="navi_map" type="ransac_ground_node" name="ransac_ground_node" output="screen" />
+    <node pkg="rviz" type="rviz" name="rviz_ground" args="-d $(find navi_map)/rviz/ground.rviz" />
+
+</launch>

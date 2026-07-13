@@ -1,0 +1,20 @@
+search:
+  # 规划器使用的地图必须和 RViz 点选目标所在的地图一致。
+  map_topic: "/global_costmap_node/costmap/costmap"
+  # map_topic: "/y_global_map"
+
+  occupied_threshold: 50
+  unknown_as_occupied: true
+  allocate_num: 3000000
+  max_search_time: 50000.0
+  use_search_window: true
+  search_window_margin: 20.0
+  search_window_retry_margins: [20.0, 50.0, 100.0]
+
+rrt:
+  max_search_time: 50000.0
+  max_iterations: 500000
+
+planner:
+  # 0: 全部搜索, 1: A*, 2: 混合A*, 3: JPS, 4: RRT
+  search_type: 0

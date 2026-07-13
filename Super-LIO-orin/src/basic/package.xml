@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>basic</name>
+  <version>0.0.0</version>
+  <description>The basic package</description>
+
+  <maintainer email="lswang@mail.ecust.edu.cn">LS.Wang</maintainer>
+
+  <license>GPLv3</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>rospy</build_depend>
+
+  <build_export_depend>roscpp</build_export_depend>
+  <build_export_depend>rospy</build_export_depend>
+
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>rospy</exec_depend>
+
+  <depend>eigen</depend>
+  <depend>pcl</depend>
+
+  <export>
+  </export>
+</package>

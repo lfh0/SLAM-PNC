@@ -1,0 +1,33 @@
+navi_map:
+  map_dir:
+    pcd_file_path: /home/lfh/SLAM+PNC/Super-LIO-orin/src/super_lio/map/map.pcd
+    pcd_ground_out_path: "/home/lfh/lfh_project/src/navi_map/PCD/parkinglot_ground_tilt.pcd"
+    pcd_non_ground_out_path: "/home/lfh/lfh_project/src/navi_map/PCD/parkinglot_non_ground_tilt.pcd"
+
+  frame:
+    mapFrame: map
+    pointcloudFrame: world
+  
+  mapmaintain:
+    inflation_radius: 0.3
+    local_map_size: 8.0
+    odom_topic: /lio/odom
+
+  sensor:
+    height: 1.0
+
+  OutlierRemoval:
+    meanK: 20
+    Thresh: 1.0
+    enabled: true
+    leaf_size: 0.05
+    max_z: 5.0
+    min_z: -1.0
+    z_window: 0.5
+    dist_thresh: 0.2
+    max_tilt_deg: 5.0
+    max_iters: 100
+    topic: /remove_outliers/pointcloud
+
+  output:
+    readpcd_topic: /readpcd

@@ -1,0 +1,65 @@
+lio:
+  # Map settings
+  map:
+    save_map: false
+    if_filter: false
+    save_map_dir: "map"
+    map_name: "map.pcd"
+    ds_size: 0.3
+    save_interval: 500
+
+  # ROS Topic input
+  ros:
+    lidar_topic: "/livox/lidar"
+    imu_topic: "/livox/imu"
+
+  # Sensor Configuration
+  sensor:
+    lidar_type: 1
+    blind: 2.0
+    maxrange: 100.0
+    filter_rate: 3.0
+    enable_downsample: true
+    voxel_fliter_size: 0.5
+    gravity_norm: 9.7946
+    # gravity_norm: 9.809
+    imu_type: 1
+    imu_na: 0.1
+    imu_ng: 0.1
+    imu_nba: 0.0001
+    imu_nbg: 0.0001
+
+  # Extrinsic Parameters
+  extrinsic:
+    lidar_imu: [0.04165, 0.02326, -0.0284,      # lidar in imu
+                1.0, 0.0, 0.0, 
+                0.0, 1.0, 0.0, 
+                0.0, 0.0, 1.0]
+    odom_robo: [0.0, 0, 0.0, 0.0, 0.0, 0.0]
+
+
+  # Vox hash Map
+  hash_map:
+    hash_capacity: 2000000
+    vox_resolution: 0.5
+
+  # Kalman Filter Parameters
+  kf:
+    kf_type: 0
+    kf_max_iterations: 4
+    kf_align_gravity: true
+    kf_quit_eps: 0.001
+
+  # output
+  output:
+    robot:  true
+    plan_env_world: false
+    plan_env_body:  false
+    ml_map:  false
+    planner: false
+    map:    true
+    dense:  true
+    pub_step: 1
+
+  eva:
+    timer: true

@@ -274,10 +274,7 @@ nh_(nh)
               default_astar_retry_margins);
     nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
     nh_.param<std::string>("planner/odom_topic", odom_topic_, "/lio/robo/odom");
-    nh_.param("planner/path_yaw_lookahead_distance", path_yaw_lookahead_distance_, -1.0);
-    if (path_yaw_lookahead_distance_ <= 0.0) {
-        nh_.param("purepursuit_node/lookahead_distance", path_yaw_lookahead_distance_, 0.3);
-    }
+    nh_.param("purepursuit_node/lookahead_distance", path_yaw_lookahead_distance_, 0.3);
     nh_.param("planner/search_type", search_type_, 0);
     int occupied_threshold;
     bool unknown_as_occupied;

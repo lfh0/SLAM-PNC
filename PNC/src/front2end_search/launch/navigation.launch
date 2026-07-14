@@ -2,10 +2,18 @@
 
 <launch>
     <arg name="start_costmap" default="true" />
+    <arg name="controller" default="true" />
+
 
     <group if="$(arg start_costmap)">
         <include file="$(find navi_map)/launch/global_inflation_local_obstacle.launch" />
     </group>
+
+
+    <group if="$(arg controller)">
+        <include file="$(find controller)/launch/controller.launch" />
+    </group>
+    
 
     <rosparam command="load" file="$(find front2end_search)/config/navigation.yaml" />
 

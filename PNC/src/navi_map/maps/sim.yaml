@@ -1,4 +1,4 @@
-image: /home/lfh/SLAM+PNC/PNC/src/navi_map/maps/sim.pgm
+image: sim.pgm
 resolution: 0.010000
 origin: [-9.730000, -2.960000, 0.0]
 negate: 0

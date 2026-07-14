@@ -1,4 +1,4 @@
-image: /home/lfh/SLAM+PNC/PNC/src/navi_map/maps/lab10.pgm
+image: lab10.pgm
 resolution: 0.050000
 origin: [-28.750000, -6.750000, 0.0]
 negate: 0

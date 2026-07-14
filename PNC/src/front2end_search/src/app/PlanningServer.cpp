@@ -26,21 +26,25 @@
 #include <geometry_msgs/PoseArray.h>
 #include <ros/package.h>
 #include <tf/transform_broadcaster.h>
-#include <tf2/LinearMath/Matrix3x3.h>
-#include <tf2/LinearMath/Quaternion.h>
+#include <tf/transform_datatypes.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <front2end_search/SendPath.h>
 #include <Eigen/Eigen>
 #include <Eigen/Dense> 
 #include <Eigen/Core>
-#include <Eigen/Geometry>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <google/protobuf/text_format.h>
 #include <ackermann_msgs/AckermannDrive.h>
+#include <algorithm>
+#include <cmath>
+#include <mutex>
 
 #include "plan_manage/traj_optimizer.h"
+#include "path_searching/kino_astar.h"
 #include "path_searching/astar.h"
+#include "path_searching/jps.h"
+#include "path_searching/rrt.h"
 #include "decomp_util/ellipsoid_decomp.h"
 #include "decomp_ros_utils/data_ros_utils.h"
 
@@ -118,12 +122,13 @@ private:
     ros::Subscriber globalMapSub_;
     ros::Subscriber localMapSub_;
     ros::Subscriber goalSub_;
-    ros::Subscriber startSub_;
     ros::Subscriber odomSub_;
 
     ros::Publisher missionPub_;
-    ros::Publisher AstarPathPub_;
     ros::Publisher kinoPathPub_;
+    ros::Publisher AstarPathPub_;
+    ros::Publisher JPSPathPub_;
+    ros::Publisher RRTPathPub_;
 
     ros::Publisher waypointshowPub_;
     ros::Publisher KinopathPub_;
@@ -138,7 +143,7 @@ private:
     nav_msgs::OccupancyGrid globalMap_;
     nav_msgs::OccupancyGrid localMap_;
     nav_msgs::Odometry carOdom_;
-    bool search_map_dirty_ = false;
+    bool search_maps_dirty_ = false;
     // geometry_msgs::Pose goalPose_;
 
     std::vector<MissionPoint> missionPoints_;
@@ -148,20 +153,17 @@ private:
     nav_msgs::Path path_nodes;
     nav_msgs::Path globalpath_;
     ackermann_msgs::AckermannDrive vel_cmd;
+    geometry_msgs::Quaternion goal_orientation_;
 
     std::vector<Eigen::MatrixXd> hPolys_, display_hPolys_;
     plan_utils::KinoTrajData kino_trajs_;
     vector<Eigen::Vector2d> kino_path_;
     
+    std::unique_ptr<path_searching::KinoAstar> kino_path_finder_;
     std::unique_ptr<path_searching::Astar> astar_path_finder_;
-
+    std::unique_ptr<path_searching::JPS> jps_path_finder_;
+    std::unique_ptr<path_searching::RRT> rrt_path_finder_;
     plan_utils::TrajContainer traj_container_;
-
-    // lfhTODO:通过定位获取初始位置来进行路径规划
-    Eigen::Vector3d sta_start_pos;
-    Eigen::Vector3d end_goal_pos;
-    bool first_start;
-
 
     int targetId_;
     double MAX_VEL;
@@ -192,15 +194,14 @@ private:
     ackermann_msgs::AckermannDrive cmd_;
     std::vector<double> astar_search_window_retry_margins_;
     std::string map_topic_;
+    int search_type_;
 
 private:
     void map_init();
-    void syncSearchMap();
+    void syncSearchMaps();
     void globalMapCallBack(const nav_msgs::OccupancyGrid::ConstPtr &msg);
     void localMapCallBack(const nav_msgs::OccupancyGrid::Ptr &msg);
-    // void goalCallBack(const geometry_msgs::PoseStamped::ConstPtr &msg);
     void goalCallBack(const geometry_msgs::PoseStamped::ConstPtr &msg);
-
     void odomCallBack(const nav_msgs::OdometryConstPtr &msg);
     
     void publishPointWithText(const Eigen::Vector2d& p, const std::string& text, const Color c);
@@ -211,6 +212,8 @@ private:
     void GetCloestLineEndPoint();
     void getRectangleConst(std::vector<Eigen::Vector3d> statelist);
     void checkCollisionUsingLine(const Eigen::Vector2d &start_pt, const Eigen::Vector2d &end_pt, bool &res);
+    void runSelectedSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
+    void updatePathOrientations(nav_msgs::Path& path_msg);
 
 public:
     void LQRpursuit(Eigen::Vector3d pos, double vel, double steer);
@@ -218,14 +221,19 @@ public:
     void carTrack(plan_utils::SingulTrajData traj);
     void carTrackbyVel(plan_utils::SingulTrajData traj);
     void Plan(float dis);
+    bool PlanbySearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     bool PlanbyAstarSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
+    bool PlanbyJPSSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
+    bool PlanbyRRTSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     bool RunMINCOParking(double duration);
     void displayMincoTraj(plan_utils::SingulTrajData display_traj);
     void displayKinoPath(plan_utils::KinoTrajData kino_trajs);
-    void displayKinoPath(vector<Eigen::Vector2d> final_path);
     void displayPolyH(const std::vector<Eigen::MatrixXd> hPolys);
     void displayPoint(const std::vector<Eigen::Vector3d> points);
+    void displayKinoPath(vector<Eigen::Vector2d> final_path);
     void displayAstarPath(vector<Eigen::Vector2d> final_path);
+    void displayJPSPath(vector<Eigen::Vector2d> final_path);
+    void displayRRTPath(vector<Eigen::Vector2d> final_path);
 
     std::vector<int> routeSearch(int startId, int targetId);
 
@@ -241,6 +249,7 @@ public:
 PlanningServer::PlanningServer(ros::NodeHandle nh, ros::NodeHandle nhPrivate):
 nh_(nh)
 {
+    goal_orientation_.w = 1.0;
     nhPrivate.param("planner/traj_res_", traj_res_, 8);
     nhPrivate.param("planner/dense_traj_res_", dense_traj_res_, 20);
     nhPrivate.param("vehicle/car_length", car_length_, 2.054);
@@ -259,26 +268,35 @@ nh_(nh)
               astar_search_window_retry_margins_,
               default_astar_retry_margins);
     nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
+    nh_.param("planner/search_type", search_type_, 0);
     int occupied_threshold;
     bool unknown_as_occupied;
     double search_max_time;
+    int rrt_max_iterations;
+    double rrt_max_time;
     nh_.param("search/occupied_threshold", occupied_threshold, 50);
     nh_.param("search/unknown_as_occupied", unknown_as_occupied, true);
     nh_.param("search/max_search_time", search_max_time, 5000.1);
-    ROS_INFO("AstarPlanningServer params: map_topic=%s, occupied_threshold=%d, "
-             "unknown_as_occupied=%d, search_max_time=%.1f",
-             map_topic_.c_str(), occupied_threshold,
-             static_cast<int>(unknown_as_occupied), search_max_time);
+    nh_.param("rrt/max_search_time", rrt_max_time, 50000.0);
+    nh_.param("rrt/max_iterations", rrt_max_iterations, 50000);
+    ROS_INFO("PlanningServer params: map_topic=%s, search_type=%d, occupied_threshold=%d, "
+             "unknown_as_occupied=%d, search_max_time=%.1f, rrt_max_time=%.1f, rrt_max_iterations=%d",
+             map_topic_.c_str(), search_type_, occupied_threshold,
+             static_cast<int>(unknown_as_occupied), search_max_time,
+             rrt_max_time, rrt_max_iterations);
+
 
     globalMapSub_ = nh_.subscribe<nav_msgs::OccupancyGrid>(map_topic_, 10, &PlanningServer::globalMapCallBack, this);
     localMapSub_ = nh_.subscribe("/local_map", 10, &PlanningServer::localMapCallBack, this);
 
-    // startSub_ = nh_.subscribe("/lio/Odometry", 1, &PlanningServer::startCallBack, this);
     goalSub_ = nh_.subscribe("/move_base_simple/goal", 1, &PlanningServer::goalCallBack, this);
-    odomSub_ = nh_.subscribe<nav_msgs::Odometry>("/lio/Odometry", 10, &PlanningServer::odomCallBack, this);
+    odomSub_ = nh_.subscribe<nav_msgs::Odometry>("/ground_truth/odom", 10, &PlanningServer::odomCallBack, this);
 
     missionPub_ = nh_.advertise<geometry_msgs::PoseArray>("/mission_points", 1);
+    kinoPathPub_ = nh_.advertise<nav_msgs::Path>("kino_path", 10);
     AstarPathPub_ = nh_.advertise<nav_msgs::Path>("astar_path", 10);
+    JPSPathPub_ = nh_.advertise<nav_msgs::Path>("jps_path", 10);
+    RRTPathPub_ = nh_.advertise<nav_msgs::Path>("rrt_path", 10);
 
     waypointshowPub_ = nh_.advertise<visualization_msgs::MarkerArray>("/planner/waypoints", 10);
     midpointshowPub_ = nh_.advertise<visualization_msgs::MarkerArray>("/planner/midpoints", 10);
@@ -291,6 +309,15 @@ nh_(nh)
     // TODO
     astar_path_finder_.reset(new path_searching::Astar);
     astar_path_finder_->init(nh_);
+    
+    kino_path_finder_.reset(new path_searching::KinoAstar);
+    kino_path_finder_->init(nh_);
+
+    jps_path_finder_.reset(new path_searching::JPS);
+    jps_path_finder_->init(nh_);
+
+    rrt_path_finder_.reset(new path_searching::RRT);
+    rrt_path_finder_->init(nh_);
     map_init();
 }
 
@@ -298,7 +325,7 @@ PlanningServer::~PlanningServer(){}
 
 void PlanningServer::globalMapCallBack(const nav_msgs::OccupancyGrid::ConstPtr &msg){
     globalMap_ = *msg;
-    search_map_dirty_ = true;
+    search_maps_dirty_ = true;
 }
 
 void PlanningServer::localMapCallBack(const nav_msgs::OccupancyGrid::Ptr &msg){
@@ -311,44 +338,74 @@ void PlanningServer::odomCallBack(const nav_msgs::OdometryConstPtr &msg){
     Eigen::Quaterniond quaternion(msg->pose.pose.orientation.w, msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z);
     Eigen::Matrix3d R = quaternion.toRotationMatrix();
     Eigen::Vector3d pos = center_pos;
-
-    // 起点位置设定
-    Eigen::Quaterniond quat(msg->pose.pose.orientation.w,
-        msg->pose.pose.orientation.x,
-        
-        msg->pose.pose.orientation.y,
-        msg->pose.pose.orientation.z);
-    auto euler = quat.toRotationMatrix().eulerAngles(0, 1, 2); // 0:X, 1:Y, 2:Z
-    double roll = euler[0], pitch = euler[1], yaw = euler[2];
-    sta_start_pos << msg->pose.pose.position.x, msg->pose.pose.position.y, yaw;
 }
 
 void PlanningServer::goalCallBack(const geometry_msgs::PoseStamped::ConstPtr &msg){
+    static std::mutex goal_mutex;
     double yaw = tf::getYaw(msg->pose.orientation);
-    // end_goal_pos << msg->pose.position.x, msg->pose.position.y, yaw;
-    ROS_INFO_STREAM("Setting goal pos: " << end_goal_pos.transpose());
-    PlanbyAstarSearch(this->sta_start_pos, end_goal_pos);
     
-    // static bool is_start = true;
-    // if (is_start) {
-    //     start_pos << msg->pose.position.x, msg->pose.position.y, yaw;
-    //     is_start = false;
-    //     ROS_INFO_STREAM("Setting start pos: " << start_pos.transpose());
-    //     // publishPointWithText(start_pos.head(2), "start", Color::Orange());
-    // } else {
-    //     goal_pos << msg->pose.position.x, msg->pose.position.y, yaw;
-    //     ROS_INFO_STREAM("Setting goal pos: " << goal_pos.transpose());
-        
-    //     // publishPointWithText(goal_pos.head(2), "goal", Color::Green());
+    static Eigen::Vector3d start_pos(0, 0, 0), goal_pos(0, 0, 0);
+    static bool is_start = true;
 
-    //     //TODO
-    //     PlanbyAstarSearch(start_pos, goal_pos);
+    Eigen::Vector3d plan_start, plan_goal;
+    bool should_plan = false;
 
-    //     is_start = true;
-    // }
+    {
+        std::lock_guard<std::mutex> lock(goal_mutex);
+        if (is_start) {
+            start_pos << msg->pose.position.x, msg->pose.position.y, yaw;
+            is_start = false;
+            ROS_INFO_STREAM("Setting start pos: " << start_pos.transpose());
+            // publishPointWithText(start_pos.head(2), "start", Color::Orange());
+            return;
+        }
+
+        goal_pos << msg->pose.position.x, msg->pose.position.y, yaw;
+        goal_orientation_ = msg->pose.orientation;
+        plan_start = start_pos;
+        plan_goal = goal_pos;
+        is_start = true;
+        should_plan = true;
+        ROS_INFO_STREAM("Setting goal pos: " << goal_pos.transpose());
+        // publishPointWithText(goal_pos.head(2), "goal", Color::Green());
+    }
+
+    if (should_plan) {
+        syncSearchMaps();
+        runSelectedSearch(plan_start, plan_goal);
+    }
 }
 
-
+void PlanningServer::runSelectedSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
+{
+    switch (search_type_) {
+        case 0:
+            PlanbyAstarSearch(start_pt, end_pt);
+            PlanbyJPSSearch(start_pt, end_pt);
+            PlanbyRRTSearch(start_pt, end_pt);
+            PlanbySearch(start_pt, end_pt);
+            break;
+        case 1:
+            PlanbyAstarSearch(start_pt, end_pt);
+            break;
+        case 2:
+            PlanbySearch(start_pt, end_pt);
+            break;
+        case 3:
+            PlanbyJPSSearch(start_pt, end_pt);
+            break;
+        case 4:
+            PlanbyRRTSearch(start_pt, end_pt);
+            break;
+        default:
+            ROS_WARN("Invalid planner/search_type=%d, run all searchers instead", search_type_);
+            PlanbyAstarSearch(start_pt, end_pt);
+            PlanbySearch(start_pt, end_pt);
+            PlanbyJPSSearch(start_pt, end_pt);
+            PlanbyRRTSearch(start_pt, end_pt);
+            break;
+    }
+}
 
 void PlanningServer::publishPointWithText(const Eigen::Vector2d& p, const std::string& text, const Color c) {
     visualization_msgs::Marker point_marker;
@@ -405,20 +462,44 @@ void PlanningServer::map_init()
         ros::Duration(0.1).sleep();
     }
 
-    // TODO:
+    // TODO
     astar_path_finder_->setMap(globalMap_);
-    search_map_dirty_ = false;
+    kino_path_finder_->setMap(globalMap_);
+    jps_path_finder_->setMap(globalMap_);
+    rrt_path_finder_->setMap(globalMap_);
+    search_maps_dirty_ = false;
 }
 
-void PlanningServer::syncSearchMap()
+void PlanningServer::syncSearchMaps()
 {
-    if (!search_map_dirty_) {
+    if (!search_maps_dirty_) {
         return;
     }
     astar_path_finder_->setMap(globalMap_);
-    search_map_dirty_ = false;
+    kino_path_finder_->setMap(globalMap_);
+    jps_path_finder_->setMap(globalMap_);
+    rrt_path_finder_->setMap(globalMap_);
+    search_maps_dirty_ = false;
 }
 
+bool PlanningServer::PlanbySearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
+{
+    Eigen::Vector4d start_state, end_state;
+    Eigen::Vector2d init_ctrl(0, 0);
+    start_time_ = ros::Time::now().toSec();
+    start_state << start_pt, 0.01;
+    end_state << end_pt, 0.01;
+
+    int status = kino_path_finder_->search(start_state, init_ctrl, end_state);
+    if(!status)
+        return false;
+    kino_path_ = kino_path_finder_->getKinoPath();
+    kino_path_finder_->reset();
+
+    displayKinoPath(kino_path_);
+
+    return true;
+}
 
 bool PlanningServer::PlanbyAstarSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
 {
@@ -426,7 +507,6 @@ bool PlanningServer::PlanbyAstarSearch(Eigen::Vector3d start_pt, Eigen::Vector3d
     Eigen::Vector2d end_state(end_pt[0], end_pt[1]);
 
     int status = path_searching::Astar::NO_PATH;
-    syncSearchMap();
     for (const double margin : astar_search_window_retry_margins_) {
         astar_path_finder_->setSearchWindowMargin(margin);
         ROS_INFO("Try Astar search with window margin %.2fm", margin);
@@ -444,6 +524,50 @@ bool PlanningServer::PlanbyAstarSearch(Eigen::Vector3d start_pt, Eigen::Vector3d
     return false;
 }
 
+bool PlanningServer::PlanbyJPSSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
+{
+    Eigen::Vector2d start_state(start_pt[0], start_pt[1]);
+    Eigen::Vector2d end_state(end_pt[0], end_pt[1]);
+
+    ROS_INFO("Start JPS search: start=(%.3f, %.3f), goal=(%.3f, %.3f)",
+             start_state.x(), start_state.y(), end_state.x(), end_state.y());
+    jps_path_finder_->reset();
+    int status = jps_path_finder_->search(start_state, end_state);
+    if(status != path_searching::JPS::REACH_END) {
+        ROS_WARN("JPS failed with status %d", status);
+        jps_path_finder_->reset();
+        return false;
+    }
+    kino_path_ = jps_path_finder_->getKinoPath();
+    jps_path_finder_->reset();
+
+    displayJPSPath(kino_path_);
+
+    return true;
+}
+
+bool PlanningServer::PlanbyRRTSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
+{
+    Eigen::Vector2d start_state(start_pt[0], start_pt[1]);
+    Eigen::Vector2d end_state(end_pt[0], end_pt[1]);
+
+    ROS_INFO("Start RRT search: start=(%.3f, %.3f), goal=(%.3f, %.3f)",
+             start_state.x(), start_state.y(), end_state.x(), end_state.y());
+    int status = rrt_path_finder_->search(start_state, end_state);
+    if(status != path_searching::RRT::REACH_END) {
+        ROS_WARN("RRT failed with status %d", status);
+        rrt_path_finder_->reset();
+        return false;
+    }
+    kino_path_ = rrt_path_finder_->getKinoPath();
+    rrt_path_finder_->reset();
+
+    displayRRTPath(kino_path_);
+
+    return true;
+}
+
+
 void PlanningServer::displayKinoPath(vector<Eigen::Vector2d> final_path)
 {
     nav_msgs::Path path_msg;
@@ -456,6 +580,8 @@ void PlanningServer::displayKinoPath(vector<Eigen::Vector2d> final_path)
     }
     path_msg.header.frame_id = "map";
     path_msg.header.stamp = ros::Time::now();
+    updatePathOrientations(path_msg);
+
     kinoPathPub_.publish(path_msg);
 }
 void PlanningServer::displayAstarPath(vector<Eigen::Vector2d> final_path)
@@ -470,9 +596,115 @@ void PlanningServer::displayAstarPath(vector<Eigen::Vector2d> final_path)
     }
     path_msg.header.frame_id = "map";
     path_msg.header.stamp = ros::Time::now();
+    updatePathOrientations(path_msg);
     AstarPathPub_.publish(path_msg);
 }
+void PlanningServer::displayJPSPath(vector<Eigen::Vector2d> final_path)
+{
+    nav_msgs::Path path_msg;
+    geometry_msgs::PoseStamped tmpPose;
+    tmpPose.header.frame_id = "map";
+    for (const auto& pt : final_path) {
+        tmpPose.pose.position.x = pt[0];
+        tmpPose.pose.position.y = pt[1];
+        path_msg.poses.push_back(tmpPose);
+    }
+    path_msg.header.frame_id = "map";
+    path_msg.header.stamp = ros::Time::now();
+    updatePathOrientations(path_msg);
+    JPSPathPub_.publish(path_msg);
+}
+void PlanningServer::displayRRTPath(vector<Eigen::Vector2d> final_path)
+{
+    nav_msgs::Path path_msg;
+    geometry_msgs::PoseStamped tmpPose;
+    tmpPose.header.frame_id = "map";
+    for (const auto& pt : final_path) {
+        tmpPose.pose.position.x = pt[0];
+        tmpPose.pose.position.y = pt[1];
+        path_msg.poses.push_back(tmpPose);
+    }
+    path_msg.header.frame_id = "map";
+    path_msg.header.stamp = ros::Time::now();
+    updatePathOrientations(path_msg);
+    RRTPathPub_.publish(path_msg);
+}
 
+void PlanningServer::updatePathOrientations(nav_msgs::Path& path_msg)
+{
+    if (path_msg.poses.empty()) {
+        return;
+    }
+
+    auto compute_path_yaw = [&path_msg](size_t index) {
+        const size_t last_index = path_msg.poses.size() - 1;
+        if (last_index == 0) {
+            return 0.0;
+        }
+
+        if (index == 0) {
+            const size_t direction_index = std::min<size_t>(4, last_index);
+            const auto& first_pose = path_msg.poses.front().pose.position;
+            const auto& direction_pose = path_msg.poses[direction_index].pose.position;
+            const double dx = direction_pose.x - first_pose.x;
+            const double dy = direction_pose.y - first_pose.y;
+            if (dx * dx + dy * dy > 1.0e-12) {
+                return std::atan2(dy, dx);
+            }
+        }
+
+        for (size_t offset = 1; offset <= 5; ++offset) {
+            const size_t prev_index = index > offset ? index - offset : 0;
+            const size_t next_index = std::min(last_index, index + offset);
+            if (prev_index == next_index) {
+                continue;
+            }
+
+            const auto& prev_pose = path_msg.poses[prev_index].pose.position;
+            const auto& next_pose = path_msg.poses[next_index].pose.position;
+            const double dx = next_pose.x - prev_pose.x;
+            const double dy = next_pose.y - prev_pose.y;
+            if (dx * dx + dy * dy > 1.0e-12) {
+                return std::atan2(dy, dx);
+            }
+        }
+
+        return 0.0;
+    };
+
+    for (size_t i = 0; i + 1 < path_msg.poses.size(); ++i) {
+        path_msg.poses[i].pose.orientation = tf::createQuaternionMsgFromYaw(compute_path_yaw(i));
+    }
+
+    path_msg.poses.back().pose.orientation = goal_orientation_;
+}
+
+void PlanningServer::displayPoint(const std::vector<Eigen::Vector3d> points)
+{
+    visualization_msgs::Marker waypoint;
+    visualization_msgs::MarkerArray waypoints_array;
+    waypoints_array.markers.clear();
+    for(int i = 0; i < points.size(); i++){
+        waypoint.id = i;
+        waypoint.header.stamp = ros::Time::now();
+        waypoint.header.frame_id = "map";
+        waypoint.type = visualization_msgs::Marker::SPHERE;
+        // waypoint.action = visualization_msgs::Marker::ADD;
+        waypoint.color.r = 0.0;
+        waypoint.color.g = 255.0;
+        waypoint.color.b = 255.0;
+        waypoint.color.a = 1.0;
+        waypoint.scale.x = 0.5;
+        waypoint.scale.y = 0.5;
+        waypoint.scale.z = 0.5;
+        waypoint.pose.position.x = points[i][0];
+        waypoint.pose.position.y = points[i][1];
+        waypoint.pose.position.z = 0;
+        waypoints_array.markers.push_back(waypoint);
+    }
+    // cout << " size:  " << waypoints_array.markers.size() << endl;
+    midpointshowPub_.publish(waypoints_array);
+}
 
 void PlanningServer::displayKinoPath(plan_utils::KinoTrajData kino_trajs)
 {

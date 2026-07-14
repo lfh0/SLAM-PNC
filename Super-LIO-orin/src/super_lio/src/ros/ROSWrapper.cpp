@@ -209,9 +209,9 @@ ROSWrapper::ROSWrapper(){
   ops.transport_hints = ros::TransportHints().tcpNoDelay();
   
   if(g_lidar_type == LID_TYPE::LIVOX){
-    ops.init<livox_ros_driver::CustomMsg>(
+    ops.init<topic_tools::ShapeShifter>(
       g_lidar_topic, 1000, 
-      boost::bind(&ROSWrapper::livoxHandler, this, _1));
+      boost::bind(&ROSWrapper::livoxGenericHandler, this, _1));
   }else{
     ops.init<sensor_msgs::PointCloud2>(
       g_lidar_topic, 1000,
@@ -235,6 +235,34 @@ ROSWrapper::ROSWrapper(){
   msg2uav_.header.frame_id = "world";
   path_.header.frame_id = "world";
   path_robot_.header.frame_id = "world";
+}
+
+void ROSWrapper::livoxGenericHandler(const topic_tools::ShapeShifter::ConstPtr& msg){
+  const std::string datatype = msg->getDataType();
+  const std::string md5sum = msg->getMD5Sum();
+  const std::string livox_md5 = ros::message_traits::MD5Sum<livox_ros_driver::CustomMsg>::value();
+
+  if (datatype != "livox_ros_driver/CustomMsg" &&
+      datatype != "livox_laser_simulation/CustomMsg") {
+    ROS_WARN_STREAM_THROTTLE(5.0, "Unsupported Livox message type: " << datatype);
+    return;
+  }
+
+  if (md5sum != livox_md5) {
+    ROS_WARN_STREAM_THROTTLE(
+      5.0, "Unsupported Livox CustomMsg md5: " << md5sum
+      << ", expected: " << livox_md5);
+    return;
+  }
+
+  livox_ros_driver::CustomMsg::ConstPtr livox_msg =
+    msg->instantiate<livox_ros_driver::CustomMsg>();
+  if (!livox_msg) {
+    ROS_WARN_STREAM_THROTTLE(5.0, "Failed to deserialize Livox CustomMsg: " << datatype);
+    return;
+  }
+
+  livoxHandler(livox_msg);
 }
 
 

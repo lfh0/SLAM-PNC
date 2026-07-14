@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   basic
+  topic_tools
   pcl_ros
   std_msgs
   geometry_msgs

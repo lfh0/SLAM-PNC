@@ -1,0 +1,14 @@
+controller_server:
+  controller_type: pure_pursuit
+  rate: 10.0
+
+  path_topic: "/astar_path"
+  odom_topic: "/lio/robo/odom"
+  start_topic: "/start"
+  cmd_vel_topic: "/cmd_vel"
+  sim_cmd_vel_topic: "/car1/cmd_vel"
+  arrive_topic: "/arrive/finish"
+
+  max_forward_linear_velocity: 0.5
+  max_backward_linear_velocity: -0.3
+  max_angular_velocity: 0.3

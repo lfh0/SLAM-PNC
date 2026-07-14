@@ -85,25 +85,25 @@ link_directories(
   # yaml-cpp
 )
 
-add_executable(waypoints_record_by_car_pose src/WaypointsRecordByCarPose.cpp)
+add_executable(waypoints_record_by_car_pose src/test/WaypointsRecordByCarPose.cpp)
 target_link_libraries(waypoints_record_by_car_pose ${catkin_LIBRARIES} yaml-cpp)
 add_dependencies(waypoints_record_by_car_pose ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
-add_executable(waypoints_record_by_2DNavGoal src/WaypointsRecordBy2DNavGoal.cpp)
+add_executable(waypoints_record_by_2DNavGoal src/test/WaypointsRecordBy2DNavGoal.cpp)
 target_link_libraries(waypoints_record_by_2DNavGoal ${catkin_LIBRARIES} yaml-cpp)
 
 
-add_executable(pathpubbyyaml src/PathPubByYaml.cpp)
+add_executable(pathpubbyyaml src/test/PathPubByYaml.cpp)
 target_link_libraries(pathpubbyyaml ${catkin_LIBRARIES} yaml-cpp)
 
 
 add_executable(planning_server
-    src/PlanningServer.cpp
-    src/traj_optimizer.cpp
-    src/kino_astar.cpp
-    src/astar.cpp
-    src/jps.cpp
-    src/rrt.cpp
+    src/app/PlanningServer.cpp
+    src/test/traj_optimizer.cpp
+    src/search/kino_astar.cpp
+    src/search/astar.cpp
+    src/search/jps.cpp
+    src/search/rrt.cpp
     ${PROTO_SRCS}
 )
 
@@ -112,9 +112,9 @@ add_dependencies(planning_server ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EX
 
 
 add_executable(astar_PlanningServer
-    src/astar_PlanningServer.cpp
-    src/traj_optimizer.cpp
-    src/astar.cpp
+    src/app/astar_PlanningServer.cpp
+    src/test/traj_optimizer.cpp
+    src/search/astar.cpp
     ${PROTO_SRCS}
 )
 target_link_libraries(astar_PlanningServer ${catkin_LIBRARIES} yaml-cpp ${Protobuf_LIBRARIES} ompl)

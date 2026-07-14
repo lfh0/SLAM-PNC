@@ -19,6 +19,7 @@
 #include <nav_msgs/Odometry.h>
 #include <ros/subscribe_options.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <topic_tools/shape_shifter.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/Marker.h>
 #include <geometry_msgs/Point.h>
@@ -93,6 +94,7 @@ public:
 
 private:
   void imuHandler(const sensor_msgs::Imu::ConstPtr&);
+  void livoxGenericHandler(const topic_tools::ShapeShifter::ConstPtr&);
   void livoxHandler(const livox_ros_driver::CustomMsg::ConstPtr&);
   void stdMsgHandler(const sensor_msgs::PointCloud2::ConstPtr&);
 

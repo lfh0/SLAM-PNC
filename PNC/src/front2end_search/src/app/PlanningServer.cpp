@@ -143,6 +143,8 @@ private:
     nav_msgs::OccupancyGrid globalMap_;
     nav_msgs::OccupancyGrid localMap_;
     nav_msgs::Odometry carOdom_;
+    std::mutex odom_mutex_;
+    bool has_odom_ = false;
     bool search_maps_dirty_ = false;
     // geometry_msgs::Pose goalPose_;
 
@@ -194,6 +196,9 @@ private:
     ackermann_msgs::AckermannDrive cmd_;
     std::vector<double> astar_search_window_retry_margins_;
     std::string map_topic_;
+    std::string odom_topic_;
+    double path_yaw_lookahead_distance_ = 0.3;
+    size_t start_yaw_sample_offset_ = 4;
     int search_type_;
 
 private:
@@ -268,6 +273,11 @@ nh_(nh)
               astar_search_window_retry_margins_,
               default_astar_retry_margins);
     nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
+    nh_.param<std::string>("planner/odom_topic", odom_topic_, "/lio/robo/odom");
+    nh_.param("planner/path_yaw_lookahead_distance", path_yaw_lookahead_distance_, -1.0);
+    if (path_yaw_lookahead_distance_ <= 0.0) {
+        nh_.param("purepursuit_node/lookahead_distance", path_yaw_lookahead_distance_, 0.3);
+    }
     nh_.param("planner/search_type", search_type_, 0);
     int occupied_threshold;
     bool unknown_as_occupied;
@@ -279,9 +289,9 @@ nh_(nh)
     nh_.param("search/max_search_time", search_max_time, 5000.1);
     nh_.param("rrt/max_search_time", rrt_max_time, 50000.0);
     nh_.param("rrt/max_iterations", rrt_max_iterations, 50000);
-    ROS_INFO("PlanningServer params: map_topic=%s, search_type=%d, occupied_threshold=%d, "
+    ROS_INFO("PlanningServer params: map_topic=%s, odom_topic=%s, search_type=%d, path_yaw_lookahead=%.3f, occupied_threshold=%d, "
              "unknown_as_occupied=%d, search_max_time=%.1f, rrt_max_time=%.1f, rrt_max_iterations=%d",
-             map_topic_.c_str(), search_type_, occupied_threshold,
+             map_topic_.c_str(), odom_topic_.c_str(), search_type_, path_yaw_lookahead_distance_, occupied_threshold,
              static_cast<int>(unknown_as_occupied), search_max_time,
              rrt_max_time, rrt_max_iterations);
 
@@ -290,7 +300,7 @@ nh_(nh)
     localMapSub_ = nh_.subscribe("/local_map", 10, &PlanningServer::localMapCallBack, this);
 
     goalSub_ = nh_.subscribe("/move_base_simple/goal", 1, &PlanningServer::goalCallBack, this);
-    odomSub_ = nh_.subscribe<nav_msgs::Odometry>("/ground_truth/odom", 10, &PlanningServer::odomCallBack, this);
+    odomSub_ = nh_.subscribe<nav_msgs::Odometry>(odom_topic_, 10, &PlanningServer::odomCallBack, this);
 
     missionPub_ = nh_.advertise<geometry_msgs::PoseArray>("/mission_points", 1);
     kinoPathPub_ = nh_.advertise<nav_msgs::Path>("kino_path", 10);
@@ -333,47 +343,34 @@ void PlanningServer::localMapCallBack(const nav_msgs::OccupancyGrid::Ptr &msg){
 }
 
 void PlanningServer::odomCallBack(const nav_msgs::OdometryConstPtr &msg){
-    Eigen::Vector3d center_pos(msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
-    Eigen::Vector3d pos2center(-car_d_cr_, 0, 0);
-    Eigen::Quaterniond quaternion(msg->pose.pose.orientation.w, msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z);
-    Eigen::Matrix3d R = quaternion.toRotationMatrix();
-    Eigen::Vector3d pos = center_pos;
+    std::lock_guard<std::mutex> lock(odom_mutex_);
+    carOdom_ = *msg;
+    has_odom_ = true;
 }
 
 void PlanningServer::goalCallBack(const geometry_msgs::PoseStamped::ConstPtr &msg){
-    static std::mutex goal_mutex;
-    double yaw = tf::getYaw(msg->pose.orientation);
-    
-    static Eigen::Vector3d start_pos(0, 0, 0), goal_pos(0, 0, 0);
-    static bool is_start = true;
-
-    Eigen::Vector3d plan_start, plan_goal;
-    bool should_plan = false;
-
+    nav_msgs::Odometry odom;
     {
-        std::lock_guard<std::mutex> lock(goal_mutex);
-        if (is_start) {
-            start_pos << msg->pose.position.x, msg->pose.position.y, yaw;
-            is_start = false;
-            ROS_INFO_STREAM("Setting start pos: " << start_pos.transpose());
-            // publishPointWithText(start_pos.head(2), "start", Color::Orange());
+        std::lock_guard<std::mutex> lock(odom_mutex_);
+        if (!has_odom_) {
+            ROS_WARN("No odom received from %s yet, ignore goal", odom_topic_.c_str());
             return;
         }
-
-        goal_pos << msg->pose.position.x, msg->pose.position.y, yaw;
-        goal_orientation_ = msg->pose.orientation;
-        plan_start = start_pos;
-        plan_goal = goal_pos;
-        is_start = true;
-        should_plan = true;
-        ROS_INFO_STREAM("Setting goal pos: " << goal_pos.transpose());
-        // publishPointWithText(goal_pos.head(2), "goal", Color::Green());
+        odom = carOdom_;
     }
 
-    if (should_plan) {
-        syncSearchMaps();
-        runSelectedSearch(plan_start, plan_goal);
-    }
+    const double start_yaw = tf::getYaw(odom.pose.pose.orientation);
+    const double goal_yaw = tf::getYaw(msg->pose.orientation);
+
+    Eigen::Vector3d plan_start(odom.pose.pose.position.x, odom.pose.pose.position.y, start_yaw);
+    Eigen::Vector3d plan_goal(msg->pose.position.x, msg->pose.position.y, goal_yaw);
+    goal_orientation_ = msg->pose.orientation;
+
+    ROS_INFO_STREAM("Planning from odom start: " << plan_start.transpose());
+    ROS_INFO_STREAM("Planning to goal: " << plan_goal.transpose());
+
+    syncSearchMaps();
+    runSelectedSearch(plan_start, plan_goal);
 }
 
 void PlanningServer::runSelectedSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
@@ -462,6 +459,16 @@ void PlanningServer::map_init()
         ros::Duration(0.1).sleep();
     }
 
+    resolution_ = globalMap_.info.resolution;
+    if (resolution_ > 1.0e-6) {
+        start_yaw_sample_offset_ = std::max<size_t>(
+            1, static_cast<size_t>(std::ceil(path_yaw_lookahead_distance_ / resolution_)));
+    } else {
+        start_yaw_sample_offset_ = 4;
+    }
+    ROS_INFO("Path start yaw uses lookahead %.3fm, map resolution %.3fm, sample offset %zu",
+             path_yaw_lookahead_distance_, resolution_, start_yaw_sample_offset_);
+
     // TODO
     astar_path_finder_->setMap(globalMap_);
     kino_path_finder_->setMap(globalMap_);
@@ -479,6 +486,11 @@ void PlanningServer::syncSearchMaps()
     kino_path_finder_->setMap(globalMap_);
     jps_path_finder_->setMap(globalMap_);
     rrt_path_finder_->setMap(globalMap_);
+    resolution_ = globalMap_.info.resolution;
+    if (resolution_ > 1.0e-6) {
+        start_yaw_sample_offset_ = std::max<size_t>(
+            1, static_cast<size_t>(std::ceil(path_yaw_lookahead_distance_ / resolution_)));
+    }
     search_maps_dirty_ = false;
 }
 
@@ -636,14 +648,14 @@ void PlanningServer::updatePathOrientations(nav_msgs::Path& path_msg)
         return;
     }
 
-    auto compute_path_yaw = [&path_msg](size_t index) {
+    auto compute_path_yaw = [this, &path_msg](size_t index) {
         const size_t last_index = path_msg.poses.size() - 1;
         if (last_index == 0) {
             return 0.0;
         }
 
         if (index == 0) {
-            const size_t direction_index = std::min<size_t>(4, last_index);
+            const size_t direction_index = std::min<size_t>(start_yaw_sample_offset_, last_index);
             const auto& first_pose = path_msg.poses.front().pose.position;
             const auto& direction_pose = path_msg.poses[direction_index].pose.position;
             const double dx = direction_pose.x - first_pose.x;
@@ -653,7 +665,7 @@ void PlanningServer::updatePathOrientations(nav_msgs::Path& path_msg)
             }
         }
 
-        for (size_t offset = 1; offset <= 5; ++offset) {
+        for (size_t offset = 1; offset <= 25; ++offset) {
             const size_t prev_index = index > offset ? index - offset : 0;
             const size_t next_index = std::min(last_index, index + offset);
             if (prev_index == next_index) {

@@ -6,6 +6,7 @@
 #include <nav_msgs/Path.h>
 #include <std_msgs/Bool.h>
 #include <string>
+#include <vector>
 
 #include "controller/purepursuit.h"
 
@@ -25,6 +26,10 @@ private:
     void startCallback(const std_msgs::Bool::ConstPtr& msg);
     void publishCommand(const ControlCommand& command);
     ControlCommand vwlimit(const ControlCommand& command) const;
+    void beginFinishOdomAveraging();
+    void collectFinishOdomSample(const RobotState& odom_state);
+    void writeFinishErrorLog();
+    double normalizeAngle(double angle) const;
 
     ros::NodeHandle nh_;
     ros::Subscriber sub_path_;
@@ -39,7 +44,10 @@ private:
     std::string cmd_vel_topic_;
     std::string sim_cmd_vel_topic_;
     std::string arrive_topic_;
+    std::string finish_error_log_path_;
     RobotState robot_state_;
+    PathPoint goal_point_;
+    std::vector<RobotState> finish_odom_samples_;
 
     std::string controller_type_;
     PurePursuit pure_pursuit_;
@@ -48,8 +56,12 @@ private:
     double max_forward_linear_velocity_ = 0.5;
     double max_backward_linear_velocity_ = -0.3;
     double max_angular_velocity_ = 0.3;
+    int finish_average_frames_ = 20;
     bool path_reset_ = false;
     bool odom_received_ = false;
-    bool start_ = true;
+    bool start_ = false;
     bool arrive_reported_ = false;
+    bool has_goal_point_ = false;
+    bool collecting_finish_odom_ = false;
+    bool finish_log_written_ = false;
 };

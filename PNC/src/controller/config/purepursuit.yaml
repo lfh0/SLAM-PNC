@@ -1,17 +1,17 @@
 purepursuit_node:
   # 路径跟踪基础参数
-  lookahead_distance: 0.4
-  vehicle_avg_speed: 0.28
+  lookahead_distance: 0.3
+  vehicle_avg_speed: 0.5
 
   # Tracking 状态航向和横向误差反馈
-  kp_yaw_: 1.5
+  kp_yaw_: 0.8
   kd_yaw_: 0.1
-  kp_pos_: 0.5
+  kp_pos_: 0.2
 
   # Init 和 GoalYawAdjust 状态 yaw PID
-  end_yaw_kp_: 1.5
-  end_yaw_ki_: 0.01
-  end_yaw_kd_: 0.01
+  end_yaw_kp_: 0.2
+  end_yaw_ki_: 0.0
+  end_yaw_kd_: 0.08
 
   # CloseEnd 状态位置 PID
   end_pos_kp_: 0.5
@@ -19,12 +19,12 @@ purepursuit_node:
   end_pos_kd_: 0.01
 
   # 速度随曲率、航向误差和横向误差衰减
-  curvature_velocity_gain: 1.2
+  curvature_velocity_gain: 0.8
   lateral_velocity_gain: 0.5
   rotate_in_place_threshold: 1.0
   derivative_filter_lambda: 0.8
 
   # 终点切换和完成阈值
   goal_slowdown_distance: 0.6
-  goal_position_tolerance: 0.05
+  goal_position_tolerance: 0.03
   goal_yaw_tolerance: 0.05

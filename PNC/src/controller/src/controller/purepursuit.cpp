@@ -210,6 +210,7 @@ ControlCommand PurePursuit::PurePursuitbyYaw(const RobotState& robot_state)
     case ControlState::None:
         if(!path_.poses.empty()){
             state_ = ControlState::Init;
+            ROS_INFO("Init.............");
         }
         return makeCommand(0.0, 0.0);
     case ControlState::Init:
@@ -217,6 +218,7 @@ ControlCommand PurePursuit::PurePursuitbyYaw(const RobotState& robot_state)
         const double yaw_error = getTheta(start_point_.yaw, robot_state.yaw);
         if(std::fabs(yaw_error) <= goal_yaw_tolerance_){
             state_ = ControlState::Tracking;
+            ROS_INFO("Tracking.............");
             reset_PID();
             return makeCommand(0.0, 0.0);
         }
@@ -234,6 +236,7 @@ ControlCommand PurePursuit::PurePursuitbyYaw(const RobotState& robot_state)
         const double dy = goal_pose.position.y - robot_state.y;
         if (std::hypot(dx, dy) <= goal_slowdown_distance_) {
             state_ = ControlState::CloseEnd;
+            ROS_INFO("CloseEnd.............");
             reset_PID();
             return computeGoalPositionPID(robot_state, end_point_, dt);
         }
@@ -304,6 +307,7 @@ ControlCommand PurePursuit::PurePursuitbyYaw(const RobotState& robot_state)
         const double dy = end_point_.y - robot_state.y;
         if (std::hypot(dx, dy) <= goal_position_tolerance_) {
             state_ = ControlState::GoalYawAdjust;
+            ROS_INFO("GoalYawAdjust.............");
             reset_PID();
             return makeCommand(0.0, 0.0);
         }
@@ -314,6 +318,7 @@ ControlCommand PurePursuit::PurePursuitbyYaw(const RobotState& robot_state)
         const double yaw_error = getTheta(end_point_.yaw, robot_state.yaw);
         if (std::fabs(yaw_error) <= goal_yaw_tolerance_) {
             state_ = ControlState::Finished;
+            ROS_INFO("\033[32mFinished\033[0m");
             reset_PID();
             return makeCommand(0.0, 0.0);
         }

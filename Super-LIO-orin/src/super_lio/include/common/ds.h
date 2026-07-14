@@ -2,6 +2,7 @@
 #ifndef LI2Sup_DS_COMMON_H
 #define LI2Sup_DS_COMMON_H
 
+#include <array>
 #include <queue>
 #include <deque>
 #include <string>
@@ -23,14 +24,15 @@ enum LID_TYPE
   OUSTER = 7
 };
 
-static const std::array<std::string, 7> LID_TYPE_NAMES = {
+static const std::array<std::string, 8> LID_TYPE_NAMES = {
   "INVALID",
   "LIVOX",
   "HESAI16",
   "VELO16",
   "VELO32",
   "VEL_NCLT",
-  "LS16"
+  "LS16",
+  "OUSTER"
 };
 
 

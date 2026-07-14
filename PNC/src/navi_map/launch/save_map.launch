@@ -1,5 +1,5 @@
 <launch>
-    <arg name="filename" value="$(find navi_map)/maps/lab10flour" />
+    <arg name="filename" value="$(find navi_map)/maps/sim" />
     <node name="map_save" pkg="map_server" type="map_saver" args="-f $(arg filename)">
         <remap from="/map" to="/projected_map" />
     </node>

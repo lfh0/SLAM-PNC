@@ -1,0 +1,70 @@
+lio:
+  # 建图相关配置
+  map:
+    save_map: true
+    if_filter: true
+    save_map_dir: "map"
+    map_name: "map.pcd"
+    ds_size: 0.25
+    save_interval: 500
+
+  # 仿真 ROS Topic，launch 中可通过参数覆盖
+  ros:
+    lidar_topic: "/car1_livox/lidar"
+    imu_topic: "/car1_livox/imu"
+
+  # Mid360 仿真发布 livox_laser_simulation/CustomMsg，lidar_type=1 走 Livox CustomMsg 兼容订阅
+  sensor:
+    lidar_type: 1
+    blind: 0.1
+    maxrange: 50.0
+    filter_rate: 3
+    enable_downsample: true
+    voxel_fliter_size: 0.05
+    gravity_norm: 9.7946
+    imu_type: 0
+    imu_na: 0.1
+    imu_ng: 0.1
+    imu_nba: 0.0001
+    imu_nbg: 0.0001
+
+  lidar_repub:
+    robot_size: [-0.8, 0.8, -0.5, 0.5]
+    maxz: 1.2
+    minz: -0.3
+    danger_box_r: 0.1
+    danger_box_z: [-0.2, 0.4]
+
+  # 外参：默认沿用 Livox Mid360 实机配置，仿真模型不同则在这里调整
+  extrinsic:
+    lidar_imu: [-0.011, -0.02329, 0.04412,
+                1.0, 0.0, 0.0,
+                0.0, 1.0, 0.0,
+                0.0, 0.0, 1.0]
+    odom_robo: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+  # 体素哈希地图
+  hash_map:
+    hash_capacity: 2000000
+    vox_resolution: 0.5
+
+  # 卡尔曼滤波
+  kf:
+    kf_type: 0
+    kf_max_iterations: 4
+    kf_align_gravity: true
+    kf_quit_eps: 0.001
+
+  # 输出
+  output:
+    robot: true
+    plan_env_world: false
+    plan_env_body: false
+    ml_map: false
+    planner: false
+    map: true
+    dense: true
+    pub_step: 1
+
+  eva:
+    timer: false

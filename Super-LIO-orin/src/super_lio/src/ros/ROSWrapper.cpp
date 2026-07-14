@@ -255,10 +255,19 @@ void ROSWrapper::livoxGenericHandler(const topic_tools::ShapeShifter::ConstPtr& 
     return;
   }
 
-  livox_ros_driver::CustomMsg::ConstPtr livox_msg =
-    msg->instantiate<livox_ros_driver::CustomMsg>();
-  if (!livox_msg) {
-    ROS_WARN_STREAM_THROTTLE(5.0, "Failed to deserialize Livox CustomMsg: " << datatype);
+  livox_ros_driver::CustomMsg::Ptr livox_msg(new livox_ros_driver::CustomMsg());
+  std::vector<uint8_t> buffer(msg->size());
+
+  try {
+    // 仿真包和 livox_ros_driver 的 CustomMsg MD5 一致，但 datatype 不同，不能使用 ShapeShifter::instantiate。
+    ros::serialization::OStream ostream(buffer.data(), buffer.size());
+    msg->write(ostream);
+    ros::serialization::IStream istream(buffer.data(), buffer.size());
+    ros::serialization::deserialize(istream, *livox_msg);
+  } catch (const std::exception& e) {
+    ROS_WARN_STREAM_THROTTLE(
+      5.0, "Failed to deserialize Livox CustomMsg: " << datatype
+      << ", error: " << e.what());
     return;
   }
 

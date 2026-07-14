@@ -1,6 +1,6 @@
 controller_server:
   controller_type: pure_pursuit
-  rate: 10.0
+  rate: 20.0
 
   path_topic: "/astar_path"
   odom_topic: "/lio/robo/odom"
@@ -8,7 +8,9 @@ controller_server:
   cmd_vel_topic: "/cmd_vel"
   sim_cmd_vel_topic: "/car1/cmd_vel"
   arrive_topic: "/arrive/finish"
+  finish_error_log_path: "/home/lfh/SLAM+PNC/PNC/src/controller/finish_error_log.txt"
+  finish_average_frames: 20
 
-  max_forward_linear_velocity: 0.5
+  max_forward_linear_velocity: 0.7
   max_backward_linear_velocity: -0.3
   max_angular_velocity: 0.3

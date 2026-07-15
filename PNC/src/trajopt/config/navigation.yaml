@@ -1,0 +1,28 @@
+robot_state:
+  front_camera_topic : "realsense/d435i/camera"
+  depth_camera_topic : "/camera/depth/image_rect_raw"
+  odom_topic : "global/odometry/imu"
+  depth_range: 40
+  pre_existing_obs_threahlod: 1.3
+
+map_maintain:
+  inflation_radius: 0.5
+  odom_topic: "/Odometry"
+  local_map_size: 20.0
+  map_frame_id: "map"
+
+trackserver:
+  ld: 2.0
+  Vel: 1.0
+  Length: 0.4  
+  path_topic: "/trajopt/server/global_traj_path"
+  laser_odom_potic: "/ground_truth/odom"
+  gazebo_pose_topic: /gazebo/model_states"
+  Vel: 1.0
+  Length: 4.2
+  MAX_VEL: 0.4
+  MIN_VEL: 0.1 
+  MAX_R_VEL:  0.4
+  MAX_ADD_ACC:  0.02
+  MAX_DEC_ACC: 0.05
+  use_acc_limit: true

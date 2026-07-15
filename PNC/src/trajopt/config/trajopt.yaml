@@ -1,0 +1,52 @@
+# 轨迹优化服务参数
+trajopt:
+  max_vel: 3.0
+
+# 订阅话题
+topics:
+  global_map: "/global_costmap_node/costmap/costmap"
+  local_map: "/local_costmap_node/costmap/costmap"
+  odom: "/lio/robo/odom"
+  path: "/astar_path"
+
+# 安全走廊参数
+corridor:
+  collision_cost_threshold: 80
+  unknown_as_occupied: true
+  # 每条路径段前后和左右允许生成走廊的最大范围
+  max_longitudinal: 0.2
+  max_lateral: 0.6
+  # 先简化A*路径，再按几何约束拆分或合并路径段
+  rdp_epsilon: 0.08
+  min_seed_length: 0.25
+  max_seed_length: 0.8
+  max_seed_deviation: 0.1
+  max_seed_yaw_error: 0.2
+  # 相邻凸走廊在公共关键点处要求的最小内部余量
+  min_overlap_clearance: 0.05
+
+# MINCO 优化参数
+optimizing:
+  traj_resolution: 8
+  des_traj_resolution: 20
+  wei_sta_obs: 7000.0
+  wei_dyn_obs: 7000.0
+  wei_feas: 1000.0
+  wei_sqrvar: 1000.0
+  wei_time: 500.0
+  dyn_obs_clearance: 1.0
+  max_vel: 3.0
+  min_vel: -3.0
+  max_acc: 1.5
+  min_acc: -1.5
+  max_cur: 0.523598
+  half_margin: 0.25
+
+# 车辆模型参数
+vehicle:
+  cars_num: 1
+  car_id: 0
+  car_length: 0.6
+  car_width: 0.6
+  car_d_cr: 0.0
+  wheelbase: 0.5

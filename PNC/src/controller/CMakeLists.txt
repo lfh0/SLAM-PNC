@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(controller)
 
+add_compile_options(-std=c++14 -Wall -Wextra)
+
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
@@ -9,16 +11,9 @@ project(controller)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
-  rospy
-  sensor_msgs
   nav_msgs
   geometry_msgs
   tf2
-  tf2_ros
-  tf2_geometry_msgs
-  tf2_sensor_msgs
-  pcl_ros
-  pcl_conversions
   std_msgs
 )
 
@@ -112,9 +107,9 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+  INCLUDE_DIRS include
 #  LIBRARIES controller
-  CATKIN_DEPENDS roscpp rospy std_msgs sensor_msgs nav_msgs geometry_msgs tf2 tf2_ros tf2_geometry_msgs tf2_sensor_msgs pcl_ros pcl_conversions
+  CATKIN_DEPENDS roscpp std_msgs nav_msgs geometry_msgs tf2
 #  DEPENDS system_lib
 )
 

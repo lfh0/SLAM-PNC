@@ -1,11 +1,12 @@
-#include<ros/ros.h>
-#include<pcl/point_cloud.h>
-#include <pcl/filters/voxel_grid.h>
-#include<pcl_conversions/pcl_conversions.h>
-#include <pcl/filters/statistical_outlier_removal.h>
+#include <iostream>
+#include <string>
 
-#include<sensor_msgs/PointCloud2.h>
-#include<pcl/io/pcd_io.h>//which contains the required definitions to load and store point clouds to PCD and other file formats.
+#include <ros/ros.h>
+#include <pcl/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <pcl/io/pcd_io.h>
  
 int main (int argc, char **argv)
 {

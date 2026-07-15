@@ -34,6 +34,8 @@ private:
     double goal_position_tolerance_ = 0.05;
     double goal_yaw_tolerance_ = 0.05;
     double goal_slowdown_distance_ = 0.4;
+    double close_end_wriggle_distance_ = 0.1;
+    double close_end_timeout_ = 5.0;
 
     double last_heading_error_ = 0.0;
     double filtered_heading_error_rate_ = 0.0;
@@ -43,8 +45,10 @@ private:
     double goal_yaw_last_error_ = 0.0;
 
     ros::Time last_control_time_;
+    ros::Time close_end_start_time_;
     bool heading_pid_initialized_ = false;
     bool goal_yaw_pid_initialized_ = false;
+    bool close_end_timer_started_ = false;
 
     ControlState state_ = ControlState::Init;
 

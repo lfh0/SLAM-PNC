@@ -1,8 +1,7 @@
 #include <path_searching/astar.h>
-#include <sstream>
 
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <iostream>
+#include <numeric>
 
 using namespace std;
 using namespace Eigen;
@@ -34,7 +33,7 @@ namespace path_searching
 
 			int buffer_size_2d_ = global_map_size_[0] * global_map_size_[1];
 			occupancy_buffer_2d_.resize(buffer_size_2d_);
-			for(int i = 0; i < globalMap_.data.size(); i++)
+   for(size_t i = 0; i < globalMap_.data.size(); i++)
 			{
 				occupancy_buffer_2d_[i] = globalMap_.data[i];
 			}
@@ -50,7 +49,8 @@ namespace path_searching
 		nh_.param("search/max_search_time", max_seach_time, 5000.1);
 		nh_.param("search/use_search_window", use_search_window_, true);
 		nh_.param("search/search_window_margin", search_window_margin_, 20.0);
-		nh_.param("search/occupied_threshold", occupied_threshold_, 50);
+		nh_.param("search/occupied_threshold", occupied_threshold_, 99);
+		nh_.param("search/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
 		nh_.param("search/unknown_as_occupied", unknown_as_occupied_, true);
 
 		nh_.param("vehicle/car_width", car_width_, 0.2);
@@ -62,8 +62,9 @@ namespace path_searching
 		nh_.param("vehicle/car_d_cr", car_d_cr_, 0.0);
 
 			nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
-			ROS_INFO("Astar map_topic=%s, occupied_threshold=%d, unknown_as_occupied=%d",
-			         map_topic_.c_str(), occupied_threshold_, static_cast<int>(unknown_as_occupied_));
+			ROS_INFO("Astar map_topic=%s, occupied_threshold=%d, obstacle_cost_weight=%.3f, unknown_as_occupied=%d",
+			         map_topic_.c_str(), occupied_threshold_, obstacle_cost_weight_,
+			         static_cast<int>(unknown_as_occupied_));
 
 		/* ---------- pre-allocated node ---------- */
 		path_node_pool_.resize(allocate_num_);
@@ -265,7 +266,7 @@ namespace path_searching
 				double original_length = 0.0;
 				std::vector<double> curvatures;
 				std::vector<double> distance;
-				for(int i = 1; i < final_path_.size(); i++) {
+    for(size_t i = 1; i < final_path_.size(); i++) {
 					original_length += (final_path_[i] - final_path_[i-1]).norm();
 				}
 				for(size_t i = 1; i < final_path_.size()-1; i++) {
@@ -318,8 +319,14 @@ namespace path_searching
 					if (!isInMap2d(pro_id)) continue;
 					if (!isInSearchWindow(pro_id)) continue;
 					if (isOccupied(pro_id)) continue;
-					// 计算从当前节点到邻居的移动代价
-					double move_cost = (dx == 0 || dy == 0) ? resolution_ : resolution_ * sqrt(2);
+						// 计算移动代价，并将膨胀层栅格值作为软障碍代价。
+						double move_cost = (dx == 0 || dy == 0) ? resolution_ : resolution_ * sqrt(2);
+						const int cell_cost = getVoxelState2d(pro_state);
+						const double max_soft_cost = std::max(1, occupied_threshold_ - 1);
+						const double normalized_cost =
+							std::max(0, cell_cost) / max_soft_cost;
+						const double obstacle_cost = obstacle_cost_weight_
+							* normalized_cost * normalized_cost * move_cost;
 					// 检查是否已经探索过该邻居
 					AstarNodePtr pro_node;
 					pro_node = expanded_nodes_.find(pro_id);
@@ -332,7 +339,7 @@ namespace path_searching
 					double tmp_g_score = 0.0;
         			double tmp_f_score = 0.0;
 
-					tmp_g_score = cur_node->g_score + move_cost;
+						tmp_g_score = cur_node->g_score + move_cost + obstacle_cost;
 					tmp_f_score = tmp_g_score + lambda_heu_ * getHeu(pro_state, goal_pos);
 
 					if (pro_node == NULL)
@@ -385,7 +392,7 @@ namespace path_searching
 
 	void Astar::ConvertNodePathToPointPath(vector<AstarNodePtr> path_nodes_)
 	{
-		for(int i = 0; i < path_nodes_.size(); i++)
+  for(size_t i = 0; i < path_nodes_.size(); i++)
 		{
 			Eigen::Vector2d pos = path_nodes_[i]->state.head(2);
 			final_path_.push_back(pos);

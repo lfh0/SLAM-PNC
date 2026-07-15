@@ -1,13 +1,13 @@
 
 #include "Utility.h"
 #include <iostream>
+#include <string>
+#include <vector>
+
 #include <ros/ros.h>
-#include <nav_msgs/OccupancyGrid.h>
-#include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseArray.h>
 #include <ros/package.h>
-#include <Eigen/Geometry>
 #include <tf/transform_datatypes.h>  
 
 class Missionpointmaker
@@ -17,9 +17,6 @@ private:
     
     ros::Subscriber getPathpointSub_;
     ros::Publisher showPathpointPub_;
-    ros::Subscriber PathpointPub_;
-
-    std::vector<geometry_msgs::Pose> missionPointstest_; //测试用
     geometry_msgs::PoseArray missionPointsVis_; //发布给rviz用
     std::vector<MissionPoint> missionPoints_;//写入ymal文件用
 
@@ -59,7 +56,7 @@ void Missionpointmaker::getPathpointCallBack(const geometry_msgs::PoseStamped::C
     pointPose = msg->pose;
     missionPointsVis_.poses.push_back(pointPose);
     std::cout << "点击的点" << pointPose << std::endl;
-    for(int i = 0 ; i < missionPoints_.size(); i++){
+    for(size_t i = 0; i < missionPoints_.size(); i++){
         std::cout << "列表" << missionPoints_[i] << std::endl << std::endl;
     }
     thismissionpoint.id = point_id;

@@ -7,8 +7,10 @@
  * @Description:
  * 本程序是导航地图维护模块
  *  ****************************************************/
-#include "Utility.h"
 #include <iostream>
+#include <string>
+#include <vector>
+
 #include <ros/ros.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
@@ -23,7 +25,6 @@ private:
 
     nav_msgs::OccupancyGrid staticOriginMap_;  //这是全局静态地图
     nav_msgs::OccupancyGrid cSpaceGlobalMap_; // 膨胀后的全局地图
-    nav_msgs::OccupancyGrid globalMap_; // 膨胀后的全局地图
     nav_msgs::Odometry odom_; //小车里程计, 需要弄清这个是表示base_link 到map的转换还是 base_link到odom的转换
 
     int cnt_;
@@ -43,7 +44,7 @@ public:
     ~MapMaintain();
 };
 
-MapMaintain::MapMaintain(ros::NodeHandle nh, ros::NodeHandle privateHh):
+MapMaintain::MapMaintain(ros::NodeHandle nh, ros::NodeHandle):
 nh_(nh)
 {
     ROS_INFO("this is map_maintain process node!...");
@@ -98,7 +99,7 @@ void MapMaintain::inflationGlobalMap(nav_msgs::OccupancyGrid map, float radius, 
     // code for inflation map
 
     // 向Rviz发送的数据中一定要包含frame_id
-    for(int i = 0; i < map.data.size(); i++)
+    for(size_t i = 0; i < map.data.size(); i++)
     {
         if(map.data[i] >= 50 && map.data[i] <= 100)
         {
@@ -117,11 +118,11 @@ void MapMaintain::inflationGlobalMap(nav_msgs::OccupancyGrid map, float radius, 
     map_infla.data.resize(map.info.width * map.info.height);
 
     //第一版膨胀
-    vector<vector<int>> idx;
-    vector<int> vec_tmp;
-    for(int x = 0; x < map.info.height; x++)
+    std::vector<std::vector<int>> idx;
+    std::vector<int> vec_tmp;
+    for(int x = 0; x < static_cast<int>(map.info.height); x++)
     {
-        for(int y = 0; y < map.info.width; y++)
+        for(int y = 0; y < static_cast<int>(map.info.width); y++)
         {
             vec_tmp.push_back(map.data[x * map.info.width + y]);
         }
@@ -129,9 +130,9 @@ void MapMaintain::inflationGlobalMap(nav_msgs::OccupancyGrid map, float radius, 
         vec_tmp.clear();
     }
 
-    for(int x = 0; x < map_infla.info.height; x++)
+    for(int x = 0; x < static_cast<int>(map_infla.info.height); x++)
     {
-        for(int y = 0;y < map_infla.info.width; y++)
+        for(int y = 0; y < static_cast<int>(map_infla.info.width); y++)
         {
             if(idx[x][y] == 100)
             {
@@ -139,9 +140,9 @@ void MapMaintain::inflationGlobalMap(nav_msgs::OccupancyGrid map, float radius, 
                 {
                     for (int v = y - radius/map_infla.info.resolution; v < y + radius/map_infla.info.resolution; v++)
                     {
-                        if (u < 0 || u >=map_infla.info.height)
+                        if (u < 0 || u >= static_cast<int>(map_infla.info.height))
                         continue;
-                        if (v < 0 || v >=map_infla.info.width)
+                        if (v < 0 || v >= static_cast<int>(map_infla.info.width))
                         continue;
                         
                         map_infla.data[u * map_infla.info.width + v] = 100;
@@ -200,9 +201,9 @@ void MapMaintain::process(){
     local_map.data.resize(local_map.info.width * local_map.info.height);
 
     std::vector<int> l_idx;
-    for(int i = 0; i < local_map.info.height; i++)
+    for(int i = 0; i < static_cast<int>(local_map.info.height); i++)
     {
-        for(int j = 0;j < local_map.info.width; j++)
+        for(int j = 0; j < static_cast<int>(local_map.info.width); j++)
         {
             if(cSpaceGlobalMap_.data[(i + row) * cSpaceGlobalMap_.info.width + (j + col)] == 100)
             {
@@ -213,7 +214,7 @@ void MapMaintain::process(){
 
     for (auto iter = l_idx.begin(); iter != l_idx.end(); iter++)
     {
-        if (*iter < 0 || *iter >= local_map.data.size())
+        if (*iter < 0 || static_cast<size_t>(*iter) >= local_map.data.size())
         continue;
         local_map.data[*iter] = 100;
         

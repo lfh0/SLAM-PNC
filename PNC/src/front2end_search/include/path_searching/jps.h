@@ -1,24 +1,17 @@
 #ifndef JPS_H
 #define JPS_H
 
-#include <Eigen/Eigen>
-#include <iostream>
-#include <map>
-#include <ros/console.h>
-#include <ros/ros.h>
+#include <Eigen/Core>
+#include <cmath>
+#include <memory>
+#include <queue>
 #include <string>
 #include <unordered_map>
-#include <boost/functional/hash.hpp>
-#include <queue>
-#include <math.h>
 #include <utility>
-#include <numeric>
-
-#include "path_searching/raycast.h"
+#include <vector>
 
 #include <nav_msgs/OccupancyGrid.h>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
+#include <ros/ros.h>
 
 using namespace std;
 
@@ -127,6 +120,7 @@ private:
     nav_msgs::OccupancyGrid globalMap_;
     std::string map_topic_;
     int occupied_threshold_;
+    double obstacle_cost_weight_;
     bool unknown_as_occupied_;
     Eigen::Vector2d goal_pos_;
     
@@ -158,6 +152,7 @@ public:
     int getVoxelState2d(const Eigen::Vector2d &pos);
     bool isOccupiedindex(const Eigen::Vector2i& id);
     bool isOccupied(const Eigen::Vector2d& pos);
+    double getTraversalCost(const Eigen::Vector2i& start, const Eigen::Vector2i& end) const;
 
     inline double getHeu(Eigen::Vector2d x1, Eigen::Vector2d x2)
     {

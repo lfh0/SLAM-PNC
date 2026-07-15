@@ -1,26 +1,17 @@
 #ifndef _ASTAR_H
 #define _ASTAR_H
 
-#include <Eigen/Eigen>
-#include <iostream>
-#include <map>
-#include <ros/console.h>
-#include <ros/ros.h>
+#include <Eigen/Core>
+#include <cmath>
+#include <memory>
+#include <queue>
 #include <string>
 #include <unordered_map>
-#include <boost/functional/hash.hpp>
-#include <queue>
-#include <math.h>
-#include <utility> 
-
-#include "path_searching/raycast.h"
+#include <utility>
+#include <vector>
 
 #include <nav_msgs/OccupancyGrid.h>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
-#include <cmath>
-#include <cfloat>
-#include <numeric>
+#include <ros/ros.h>
 
 using namespace std;
 
@@ -109,6 +100,7 @@ private:
     nav_msgs::OccupancyGrid globalMap_;
     std::string map_topic_;
     int occupied_threshold_;
+    double obstacle_cost_weight_;
     bool unknown_as_occupied_;
 
     bool has_path_ = false;

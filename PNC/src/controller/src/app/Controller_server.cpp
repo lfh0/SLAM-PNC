@@ -1,8 +1,10 @@
 #include "controller/controller_server.h"
 
+#include <geometry_msgs/Twist.h>
 #include <tf2/utils.h>
 
 #include <algorithm>
+#include <clocale>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -45,7 +47,7 @@ void ControllerServer::spin()
                 beginFinishOdomAveraging();
             }
             ROS_INFO("Arrive at the goal");
-            start_ = false;
+            // start_ = false;
         }
 
         publishCommand(command);
@@ -220,7 +222,6 @@ void ControllerServer::writeFinishErrorLog()
         return;
     }
 
-    const ros::Time now = ros::Time::now();
     log_file << std::fixed << std::setprecision(6)
              << " goal_x " << goal_point_.x
              << " goal_y " << goal_point_.y

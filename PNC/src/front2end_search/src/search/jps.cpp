@@ -1,10 +1,10 @@
 #include <path_searching/jps.h>
-#include <queue>
+
 #include <algorithm>
-#include <sstream>
+#include <iostream>
+#include <numeric>
 
 #include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
 
 using namespace std;
 using namespace Eigen;
@@ -36,7 +36,7 @@ namespace path_searching
 
 			int buffer_size_2d_ = global_map_size_[0] * global_map_size_[1];
 			occupancy_buffer_2d_.resize(buffer_size_2d_);
-			for(int i = 0; i < globalMap_.data.size(); i++)
+   for(size_t i = 0; i < globalMap_.data.size(); i++)
 			{
 				occupancy_buffer_2d_[i] = globalMap_.data[i];
 			}
@@ -51,6 +51,7 @@ namespace path_searching
 		nh_.param("search/allocate_num", allocate_num_, 500000);
 		nh_.param("search/max_search_time", max_seach_time, 5000.1);
 		nh_.param("search/occupied_threshold", occupied_threshold_, 50);
+		nh_.param("search/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
 		nh_.param("search/unknown_as_occupied", unknown_as_occupied_, true);
 
 		nh_.param("vehicle/car_width", car_width_, 0.6);
@@ -304,6 +305,37 @@ namespace path_searching
 		return (unknown_as_occupied_ && state < 0) || state >= occupied_threshold_;
 	}
 
+	double JPS::getTraversalCost(const Eigen::Vector2i& start,
+	                             const Eigen::Vector2i& end) const
+	{
+		const Eigen::Vector2i delta = end - start;
+		const int steps = std::max(std::abs(delta.x()), std::abs(delta.y()));
+		if (steps == 0) {
+			return 0.0;
+		}
+
+		const Eigen::Vector2i direction(
+			(delta.x() > 0) - (delta.x() < 0),
+			(delta.y() > 0) - (delta.y() < 0));
+		const double step_length =
+			(direction.x() == 0 || direction.y() == 0)
+			? resolution_ : resolution_ * std::sqrt(2.0);
+		const double max_soft_cost = std::max(1, occupied_threshold_ - 1);
+
+		double cost = 0.0;
+		Eigen::Vector2i index = start;
+		for (int i = 0; i < steps; ++i) {
+			index += direction;
+			const int cell_cost = occupancy_buffer_2d_[
+				index.y() * global_map_size_.x() + index.x()];
+			const double normalized_cost =
+				std::max(0, cell_cost) / max_soft_cost;
+			cost += step_length * (1.0 + obstacle_cost_weight_
+				* normalized_cost * normalized_cost);
+		}
+		return cost;
+	}
+
     int JPS::search(Eigen::Vector2d& start_pos, Eigen::Vector2d& goal_pos) {
 		// ros::Rate vis_rate(10); // 10Hz
     	// int vis_counter = 0;
@@ -391,7 +423,7 @@ namespace path_searching
 				double original_length = 0.0;
 				std::vector<double> curvatures;
 				std::vector<double> distance;
-				for(int i = 1; i < final_path_.size(); i++) {
+    for(size_t i = 1; i < final_path_.size(); i++) {
 					original_length += (final_path_[i] - final_path_[i-1]).norm();
 				}
 				for(size_t i = 1; i < final_path_.size()-1; i++) {
@@ -474,7 +506,7 @@ namespace path_searching
                 // 计算代价
                 Eigen::Vector2d jump_pos;
                 indexToPos2d(jump_point, jump_pos);
-                double move_cost = (jump_pos - cur_node->state).norm();
+                double move_cost = getTraversalCost(cur_node->index, jump_point);
                 double tmp_g_score = cur_node->g_score + move_cost;
                 double tmp_f_score = tmp_g_score + lambda_heu_ * getHeu(jump_pos, goal_pos);
                 
@@ -629,7 +661,7 @@ namespace path_searching
     
     void JPS::ConvertNodePathToPointPath(vector<JPSNodePtr> path_nodes_)
 	{
-		for(int i = 0; i < path_nodes_.size(); i++)
+  for(size_t i = 0; i < path_nodes_.size(); i++)
 		{
 			Eigen::Vector2d pos = path_nodes_[i]->state.head(2);
 			final_path_.push_back(pos);

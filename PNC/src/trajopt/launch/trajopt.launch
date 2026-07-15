@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+
+<launch>
+    <!-- <node name="rviz_traj" pkg="rviz" type="rviz" required="true" args="-d $(find navi_map)/rviz/navi_2d.rviz" /> -->
+
+    <!-- TrajoptServer 使用全局 NodeHandle，参数需要加载到全局命名空间。 -->
+    <rosparam command="load" file="$(find trajopt)/config/trajopt.yaml" />
+
+    <node name="traj_opt" pkg="trajopt" type="traj_opt" output="screen">
+    </node>
+    
+</launch>

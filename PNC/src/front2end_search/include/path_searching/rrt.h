@@ -1,12 +1,14 @@
 #ifndef RRT_H
 #define RRT_H
 
-#include <ros/ros.h>
-#include <Eigen/Dense>
-#include <vector>
+#include <Eigen/Core>
+#include <memory>
 #include <random>
+#include <string>
+#include <vector>
+
 #include <nav_msgs/OccupancyGrid.h>
-#include <visualization_msgs/Marker.h>
+#include <ros/ros.h>
 
 using namespace std;
 
@@ -40,6 +42,7 @@ private:
     Node* findNearestNode(const Eigen::Vector2d& point);
     Eigen::Vector2d steer(const Eigen::Vector2d& from, const Eigen::Vector2d& to);
     bool isPathCollisionFree(const Eigen::Vector2d& start, const Eigen::Vector2d& end);
+    double getEdgeCost(const Eigen::Vector2d& start, const Eigen::Vector2d& end);
     void rewire(Node* new_node, double radius);
     void retrievePath(Node* end_node);
 
@@ -54,6 +57,7 @@ private:
     nav_msgs::OccupancyGrid global_map_;
     std::string map_topic_;
     int occupied_threshold_;
+    double obstacle_cost_weight_;
     bool unknown_as_occupied_;
     std::vector<signed char> occupancy_buffer_;
     Eigen::Vector2d map_origin_;

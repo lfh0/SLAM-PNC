@@ -1,3 +1,0 @@
-1.请不要在purepursuit中写ControllerOutput，也不要判断是否安全之类，只负责计算控制命令。
-2.不要在purepursuit中写限速的代码，只负责计算控制命令。
-3.在PurePursuitbyYaw中，根据ControlState，判断是执行执行状态。

@@ -7,7 +7,7 @@ global_costmap_node:
     publish_frequency: 1.0
     rolling_window: false
     track_unknown_space: true
-    robot_radius: 0.0
+    robot_radius: 0.45
 
     plugins:
       - {name: static_layer, type: "costmap_2d::StaticLayer"}
@@ -21,8 +21,8 @@ global_costmap_node:
 
     inflation_layer:
       enabled: true
-      inflation_radius: 0.35
-      cost_scaling_factor: 3.0
+      inflation_radius: 1.5
+      cost_scaling_factor: 2.0
 
 local_costmap_node:
   costmap:
@@ -36,7 +36,7 @@ local_costmap_node:
     height: 12.0
     resolution: 0.05
     track_unknown_space: false
-    robot_radius: 0.0
+    robot_radius: 0.45
 
     plugins:
       - {name: obstacle_layer, type: "costmap_2d::ObstacleLayer"}
@@ -61,5 +61,5 @@ local_costmap_node:
 
     inflation_layer:
       enabled: true
-      inflation_radius: 0.35
-      cost_scaling_factor: 3.0
+      inflation_radius: 1.5
+      cost_scaling_factor: 2.0

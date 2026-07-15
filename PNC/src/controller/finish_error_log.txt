@@ -5,3 +5,21 @@
  goal_x -4.990000 goal_y 3.540000 goal_yaw -1.597205 avg_odom_x -4.991246 avg_odom_y 3.547447 avg_odom_yaw -1.622697 error_x -0.001246 error_y 0.007447 error_xy 0.007550 error_yaw -0.025491
  goal_x -8.480000 goal_y -1.460000 goal_yaw -0.045003 avg_odom_x -8.459384 avg_odom_y -1.473114 avg_odom_yaw -0.047223 error_x 0.020616 error_y -0.013114 error_xy 0.024434 error_yaw -0.002220
  goal_x 2.050000 goal_y -0.370000 goal_yaw -1.667346 avg_odom_x 2.040850 avg_odom_y -0.373094 avg_odom_yaw -1.610007 error_x -0.009150 error_y -0.003094 error_xy 0.009659 error_yaw 0.057340
+ goal_x -0.560000 goal_y 4.420000 goal_yaw 1.639143 avg_odom_x -0.560933 avg_odom_y 4.384582 avg_odom_yaw 1.621357 error_x -0.000932 error_y -0.035418 error_xy 0.035431 error_yaw -0.017785
+ goal_x -3.620000 goal_y -1.770000 goal_yaw -3.118706 avg_odom_x -3.651603 avg_odom_y -1.763755 avg_odom_yaw 3.098750 error_x -0.031603 error_y 0.006245 error_xy 0.032214 error_yaw -0.065728
+ goal_x -2.980000 goal_y -1.740000 goal_yaw 0.071962 avg_odom_x -3.009211 avg_odom_y -1.732395 avg_odom_yaw 0.192295 error_x -0.029211 error_y 0.007605 error_xy 0.030184 error_yaw 0.120333
+ goal_x -7.520000 goal_y -1.550000 goal_yaw 3.038263 avg_odom_x -7.495569 avg_odom_y -1.545447 avg_odom_yaw 2.976773 error_x 0.024431 error_y 0.004553 error_xy 0.024852 error_yaw -0.061491
+ goal_x -8.520000 goal_y -1.050000 goal_yaw 3.102903 avg_odom_x -8.496495 avg_odom_y -1.013593 avg_odom_yaw 3.077726 error_x 0.023505 error_y 0.036407 error_xy 0.043336 error_yaw -0.025177
+ goal_x -4.610000 goal_y -0.870000 goal_yaw 0.000000 avg_odom_x -4.635702 avg_odom_y -0.879059 avg_odom_yaw 0.110382 error_x -0.025702 error_y -0.009059 error_xy 0.027251 error_yaw 0.110382
+ goal_x -8.620000 goal_y 5.790000 goal_yaw 1.485251 avg_odom_x -8.595652 avg_odom_y 5.808789 avg_odom_yaw 1.406535 error_x 0.024348 error_y 0.018790 error_xy 0.030755 error_yaw -0.078716
+ goal_x -8.510000 goal_y -1.760000 goal_yaw -1.591950 avg_odom_x -8.548767 avg_odom_y -1.766267 avg_odom_yaw -1.560762 error_x -0.038767 error_y -0.006267 error_xy 0.039270 error_yaw 0.031188
+ goal_x -8.700000 goal_y 5.930000 goal_yaw 1.595805 avg_odom_x -8.746387 avg_odom_y 5.909338 avg_odom_yaw 1.406708 error_x -0.046387 error_y -0.020662 error_xy 0.050780 error_yaw -0.189097
+ goal_x -0.270000 goal_y -0.500000 goal_yaw 0.026723 avg_odom_x -0.232721 avg_odom_y -0.511513 avg_odom_yaw -0.142232 error_x 0.037279 error_y -0.011513 error_xy 0.039017 error_yaw -0.168955
+ goal_x -4.930000 goal_y 7.270000 goal_yaw -1.601718 avg_odom_x -4.885608 avg_odom_y 7.250362 avg_odom_yaw -1.321461 error_x 0.044392 error_y -0.019637 error_xy 0.048542 error_yaw 0.280257
+ goal_x -5.060000 goal_y 5.640000 goal_yaw -1.495014 avg_odom_x -5.102873 avg_odom_y 5.646285 avg_odom_yaw -1.335478 error_x -0.042873 error_y 0.006285 error_xy 0.043331 error_yaw 0.159536
+ goal_x -5.120000 goal_y 6.060000 goal_yaw -1.573582 avg_odom_x -5.121892 avg_odom_y 6.054423 avg_odom_yaw -1.348430 error_x -0.001892 error_y -0.005577 error_xy 0.005889 error_yaw 0.225151
+ goal_x -4.890000 goal_y 6.680000 goal_yaw -1.483404 avg_odom_x -4.860269 avg_odom_y 6.631124 avg_odom_yaw -1.350803 error_x 0.029731 error_y -0.048876 error_xy 0.057208 error_yaw 0.132601
+ goal_x -0.830000 goal_y 6.720000 goal_yaw -1.563139 avg_odom_x -0.838523 avg_odom_y 6.678150 avg_odom_yaw -1.594407 error_x -0.008523 error_y -0.041850 error_xy 0.042709 error_yaw -0.031268
+ goal_x -3.710000 goal_y 4.590000 goal_yaw -0.025022 avg_odom_x -3.699684 avg_odom_y 4.560069 avg_odom_yaw 0.027162 error_x 0.010316 error_y -0.029931 error_xy 0.031659 error_yaw 0.052184
+ goal_x -8.580000 goal_y 7.200000 goal_yaw -1.551903 avg_odom_x -8.510058 avg_odom_y 7.209293 avg_odom_yaw -1.456602 error_x 0.069942 error_y 0.009294 error_xy 0.070557 error_yaw 0.095301
+ goal_x -3.600000 goal_y 4.570000 goal_yaw -0.059774 avg_odom_x -3.628677 avg_odom_y 4.569415 avg_odom_yaw -0.151496 error_x -0.028677 error_y -0.000585 error_xy 0.028682 error_yaw -0.091722

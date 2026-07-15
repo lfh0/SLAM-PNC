@@ -1,11 +1,9 @@
 #include <path_searching/rrt.h>
+
 #include <algorithm>
 #include <cmath>
-
-#include <sstream>
-
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <iostream>
+#include <numeric>
 
 using namespace std;
 using namespace Eigen;
@@ -30,6 +28,7 @@ void RRT::init(ros::NodeHandle& nh) {
     nh_.param("rrt/max_search_time", max_search_time_, 50000.0);
     nh_.param("rrt/max_iterations", max_iterations_, 50000);
     nh_.param("search/occupied_threshold", occupied_threshold_, 50);
+    nh_.param("search/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
     nh_.param("search/unknown_as_occupied", unknown_as_occupied_, true);
     
     // 初始化随机数生成器范围（会在setMap中更新）
@@ -125,14 +124,34 @@ int RRT::search(const Eigen::Vector2d& start_pos, const Eigen::Vector2d& goal_po
             continue;
         }
 
+        // 在邻域内选择累计代价最低的可行父节点。
+        Node* best_parent = nearest_node;
+        double best_cost = nearest_node->cost
+            + getEdgeCost(nearest_node->position, new_point);
+        for (auto node : nodes_) {
+            if (node == nearest_node
+                || getDistance(node->position, new_point) > search_radius_) {
+                continue;
+            }
+            if (!isPathCollisionFree(node->position, new_point)) {
+                continue;
+            }
+            const double candidate_cost = node->cost
+                + getEdgeCost(node->position, new_point);
+            if (candidate_cost < best_cost) {
+                best_parent = node;
+                best_cost = candidate_cost;
+            }
+        }
+
         // 创建新节点
         Node* new_node = new Node;
         new_node->position = new_point;
-        new_node->parent = nearest_node;
-        new_node->cost = nearest_node->cost + getDistance(nearest_node->position, new_point);
+        new_node->parent = best_parent;
+        new_node->cost = best_cost;
         
         // 添加到树中
-        nearest_node->children.push_back(new_node);
+        best_parent->children.push_back(new_node);
         nodes_.push_back(new_node);
         node_pool_.push_back(new_node);
 
@@ -150,7 +169,7 @@ int RRT::search(const Eigen::Vector2d& start_pos, const Eigen::Vector2d& goal_po
                 Node* goal_node = new Node;
                 goal_node->position = goal_pos;
                 goal_node->parent = new_node;
-                goal_node->cost = new_node->cost + getDistance(new_node->position, goal_pos);
+                goal_node->cost = new_node->cost + getEdgeCost(new_node->position, goal_pos);
                 
                 new_node->children.push_back(goal_node);
                 nodes_.push_back(goal_node);
@@ -162,7 +181,7 @@ int RRT::search(const Eigen::Vector2d& start_pos, const Eigen::Vector2d& goal_po
                 double original_length = 0.0;
 				std::vector<double> curvatures;
 				std::vector<double> distance;
-				for(int i = 1; i < final_path_.size(); i++) {
+    for(size_t i = 1; i < final_path_.size(); i++) {
 					original_length += (final_path_[i] - final_path_[i-1]).norm();
 				}
 				for(size_t i = 1; i < final_path_.size()-1; i++) {
@@ -250,6 +269,30 @@ bool RRT::isPathCollisionFree(const Eigen::Vector2d& start, const Eigen::Vector2
     return !isOccupied(end);
 }
 
+double RRT::getEdgeCost(const Eigen::Vector2d& start, const Eigen::Vector2d& end) {
+    const Eigen::Vector2d delta = end - start;
+    const double length = delta.norm();
+    if (length <= 1.0e-9) {
+        return 0.0;
+    }
+
+    const int steps = std::max(1, static_cast<int>(std::ceil(length / resolution_)));
+    const double step_length = length / steps;
+    const double max_soft_cost = std::max(1, occupied_threshold_ - 1);
+    double cost = 0.0;
+    for (int i = 1; i <= steps; ++i) {
+        const Eigen::Vector2d point = start
+            + delta * (static_cast<double>(i) / steps);
+        Eigen::Vector2i index;
+        posToIndex(point, index);
+        const int cell_cost = occupancy_buffer_[index.y() * map_size_.x() + index.x()];
+        const double normalized_cost = std::max(0, cell_cost) / max_soft_cost;
+        cost += step_length * (1.0 + obstacle_cost_weight_
+            * normalized_cost * normalized_cost);
+    }
+    return cost;
+}
+
 void RRT::rewire(Node* new_node, double radius) {
     for (auto node : nodes_) {
         if (node == new_node || node == new_node->parent) continue;
@@ -257,7 +300,8 @@ void RRT::rewire(Node* new_node, double radius) {
         double dist = getDistance(new_node->position, node->position);
         if (dist > radius) continue;
         
-        if (new_node->cost + dist < node->cost) {
+        const double edge_cost = getEdgeCost(new_node->position, node->position);
+        if (new_node->cost + edge_cost < node->cost) {
             if (isPathCollisionFree(new_node->position, node->position)) {
                 // 从原父节点中移除
                 if (node->parent) {
@@ -267,7 +311,7 @@ void RRT::rewire(Node* new_node, double radius) {
                 
                 // 更新父节点和代价
                 node->parent = new_node;
-                node->cost = new_node->cost + dist;
+                node->cost = new_node->cost + edge_cost;
                 new_node->children.push_back(node);
                 
                 // 递归更新子节点代价
@@ -277,7 +321,8 @@ void RRT::rewire(Node* new_node, double radius) {
                     queue.pop_back();
                     
                     for (auto child : current->children) {
-                        double new_cost = current->cost + getDistance(current->position, child->position);
+                        double new_cost = current->cost
+                            + getEdgeCost(current->position, child->position);
                         if (new_cost < child->cost) {
                             child->cost = new_cost;
                             queue.push_back(child);

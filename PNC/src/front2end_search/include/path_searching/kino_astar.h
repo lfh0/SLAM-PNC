@@ -1,37 +1,21 @@
 #ifndef _KINODYNAMIC_ASTAR_H
 #define _KINODYNAMIC_ASTAR_H
 
-#include <Eigen/Eigen>
-#include <iostream>
+#include <cmath>
 #include <map>
-#include <ros/console.h>
-#include <ros/ros.h>
+#include <memory>
+#include <queue>
 #include <string>
 #include <unordered_map>
-#include <boost/functional/hash.hpp>
-#include <queue>
-#include <math.h>
 #include <utility>
+#include <vector>
 
 #include "path_searching/raycast.h"
 
 #include <nav_msgs/OccupancyGrid.h>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
+#include <ros/ros.h>
 
-#include "plan_utils/traj_container.hpp"
-#include <pcl/point_cloud.h>
-#include <nav_msgs/Odometry.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/point_types.h>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/search/kdtree.h>
-#include <pcl/search/impl/kdtree.hpp>
-#include <pcl/point_types.h>
 #include <ompl/base/spaces/ReedsSheppStateSpace.h>
-#include <ompl/base/spaces/DubinsStateSpace.h>
-#include <ompl/geometric/SimpleSetup.h>
 
 using namespace std;
 
@@ -205,15 +189,7 @@ public:
     double total_s_;
     std::multimap<double, MiddleNodePtr> openSet_;
     double gettimeHeu(int& idx, double& vel);
-    double calculateCurNode2nearestSingul(int idx);
     /*------------------------------------------*/
-
-    /*-------for speed planning and dynamic avoidance-----*/
-    bool ifdynamic_;
-    std::vector<bool> have_received_trajs_;
-    std::vector<plan_utils::TrajContainer> swarm_traj_container_;
-    std::vector<plan_utils::TrajContainer> swarm_last_traj_container_;
-    /*-------------------------------------------------*/
 
     /* ---------- record data ---------- */
     Eigen::Vector4d start_state_, end_state_;
@@ -253,12 +229,12 @@ public:
     double car_width_, car_length_, car_wheelbase_, car_front_suspension_, 
            car_rear_suspension_, car_max_steering_angle_, car_d_cr_;
 
-    int cars_num_, car_id_;
     vector<Eigen::Vector2d> final_path_;
     /* map */
     nav_msgs::OccupancyGrid globalMap_;
     std::string map_topic_;
     int occupied_threshold_;
+    double obstacle_cost_weight_;
     bool unknown_as_occupied_;
 
 
@@ -352,17 +328,12 @@ public:
 	    void findNearestNode(Eigen::Vector2d& start_pos, bool first_search);
     int search(Eigen::Vector4d start_state, Eigen::Vector2d init_ctrl,
               Eigen::Vector4d end_state);
-    bool searchTime(plan_utils::KinoTrajData &flat_trajs, double &start_world_time);
     void getTruncatedposLists();
-    void getSingulNodes();
     Eigen::Vector3d CalculateInitPos(double& t, int& singul);
     // inital semantic map
     // void intialMap(map_utils::TrajPlannerMapItf *map_itf);
     void setFreeSpaces(std::vector<Eigen::Vector2d>& pos_vec, std::vector<double>& yaw_vec);
-    void setAllCarsTrajs(plan_utils::TrajContainer& trajectory, int& car_id);
-    void setAllCarsLastTrajs(plan_utils::TrajContainer& trajectory, int& car_id);
     // get kino traj for optimization  
-    void getKinoNode(plan_utils::KinoTrajData &flat_trajs);
     void NodeVis(Eigen::Vector3d state);
     void checkCollisionUsingPosAndYaw(const Eigen::Vector3d &state, bool& res);
     void checkCollisionUsingLine(const Eigen::Vector2d &start_pt, const Eigen::Vector2d &end_pt, bool &res);    

@@ -44,6 +44,10 @@ void PurePursuit::param_init(const ros::NodeHandle& nh)
     nh.param("purepursuit_node/goal_position_tolerance", goal_position_tolerance_, 0.05);
     nh.param("purepursuit_node/goal_yaw_tolerance", goal_yaw_tolerance_, 0.05);
     nh.param("purepursuit_node/goal_slowdown_distance", goal_slowdown_distance_, 0.4);
+    nh.param("purepursuit_node/close_end_wriggle_distance", close_end_wriggle_distance_, 0.1);
+    nh.param("purepursuit_node/close_end_timeout", close_end_timeout_, 5.0);
+    close_end_wriggle_distance_ = std::max(close_end_wriggle_distance_, goal_position_tolerance_);
+    close_end_timeout_ = std::max(close_end_timeout_, 0.0);
     lookahead_distance_ = std::max(lookahead_distance_, 1.0e-3);
     reset_PID();
     state_ = ControlState::None;
@@ -59,6 +63,7 @@ bool PurePursuit::reset(const nav_msgs::Path& path)
     path_ = path;
     reset_PID();
     last_nearest_index_ = 0;
+    close_end_timer_started_ = false;
     state_ = ControlState::None;
     start_point_.x = path_.poses.front().pose.position.x;
     start_point_.y = path_.poses.front().pose.position.y;
@@ -238,6 +243,7 @@ ControlCommand PurePursuit::PurePursuitbyYaw(const RobotState& robot_state)
             state_ = ControlState::CloseEnd;
             ROS_INFO("CloseEnd.............");
             reset_PID();
+            close_end_timer_started_ = false;
             return computeGoalPositionPID(robot_state, end_point_, dt);
         }
 
@@ -305,8 +311,32 @@ ControlCommand PurePursuit::PurePursuitbyYaw(const RobotState& robot_state)
     case ControlState::CloseEnd: {
         const double dx = end_point_.x - robot_state.x;
         const double dy = end_point_.y - robot_state.y;
-        if (std::hypot(dx, dy) <= goal_position_tolerance_) {
+        const double goal_distance = std::hypot(dx, dy);
+        // 只有已经非常接近终点、但仍未进入位置容差时，才认为可能发生蠕动。
+        if (goal_distance > goal_position_tolerance_
+            && goal_distance <= close_end_wriggle_distance_) {
+            if (!close_end_timer_started_) {
+                close_end_start_time_ = current_time;
+                close_end_timer_started_ = true;
+                ROS_INFO("CloseEnd wriggle detection started at %.3fm from goal", goal_distance);
+            }
+        } else {
+            close_end_timer_started_ = false;
+        }
+        const double close_end_elapsed = close_end_timer_started_
+            ? (current_time - close_end_start_time_).toSec()
+            : 0.0;
+        const bool close_end_timed_out = close_end_timer_started_
+            && close_end_timeout_ > 0.0
+            && close_end_elapsed >= close_end_timeout_;
+
+        if (goal_distance <= goal_position_tolerance_ || close_end_timed_out) {
             state_ = ControlState::GoalYawAdjust;
+            close_end_timer_started_ = false;
+            if (close_end_timed_out) {
+                ROS_WARN("CloseEnd wriggled for %.2fs at %.3fm from goal, switch to GoalYawAdjust",
+                         close_end_elapsed, goal_distance);
+            }
             ROS_INFO("GoalYawAdjust.............");
             reset_PID();
             return makeCommand(0.0, 0.0);

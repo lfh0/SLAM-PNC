@@ -1,8 +1,9 @@
 #include <path_searching/kino_astar.h>
-#include <sstream>
 
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <iostream>
+#include <numeric>
+
+#include <ompl/geometric/SimpleSetup.h>
 
 using namespace std;
 using namespace Eigen;
@@ -33,7 +34,7 @@ namespace path_searching
       globalMap_.info.origin.position.y);
 
     occupancy_buffer_2d_.resize(globalMap_.data.size());
-    for(int i = 0; i < globalMap_.data.size(); i++)
+    for(size_t i = 0; i < globalMap_.data.size(); i++)
     {
       occupancy_buffer_2d_[i] = globalMap_.data[i];
     }
@@ -52,6 +53,7 @@ namespace path_searching
       nh_.param("search/check_num", check_num_, 5);
       nh_.param("search/max_search_time", max_seach_time, 3000.1);
       nh_.param("search/occupied_threshold", occupied_threshold_, 50);
+      nh_.param("search/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
       nh_.param("search/unknown_as_occupied", unknown_as_occupied_, true);
       nh_.param("search/traj_forward_penalty", traj_forward_penalty, 1.0);
       nh_.param("search/traj_back_penalty", traj_back_penalty, 5.0);
@@ -61,8 +63,6 @@ namespace path_searching
       nh_.param("search/step_arc", step_arc, 1.0);//2.0
       nh_.param("search/checkl", checkl, 0.2);
 
-      nh_.param("vehicle/cars_num", cars_num_, 1);
-      nh_.param("vehicle/car_id", car_id_, 0);
       nh_.param("vehicle/car_width", car_width_, 0.6);
       nh_.param("vehicle/car_length", car_length_, 1.0);
       nh_.param("vehicle/car_wheelbase", car_wheelbase_, 0.8);
@@ -86,11 +86,6 @@ namespace path_searching
       use_time_node_num_ = 0;
       iter_num_ = 0;
 
-      have_received_trajs_.resize(cars_num_);
-      swarm_traj_container_.resize(cars_num_);
-      swarm_last_traj_container_.resize(cars_num_);
-      fill(have_received_trajs_.begin(), have_received_trajs_.end(), false);
-      ifdynamic_ = false;
       
       nh_.param("search/max_vel", max_vel_, 0.5);
       nh_.param("search/max_acc", max_acc_, 0.3);
@@ -265,8 +260,8 @@ namespace path_searching
           Eigen::Vector2d end_point = pos + Rotation_matrix * car_vertex_[i+1];
 
           RayCaster raycaster;
-          bool need_ray = raycaster.setInput((start_point - map_origin_) / resolution_,
-                                             (end_point - map_origin_) / resolution_);
+          raycaster.setInput((start_point - map_origin_) / resolution_,
+                             (end_point - map_origin_) / resolution_);
           Eigen::Vector2d half(0.5, 0.5);
           Eigen::Vector2d ray_pt;
           while(raycaster.step(ray_pt))
@@ -285,8 +280,8 @@ namespace path_searching
   {
       res = false;
       RayCaster raycaster;
-      bool need_ray = raycaster.setInput((start_pt - map_origin_) / resolution_,
-                                         (end_pt - map_origin_) / resolution_);
+      raycaster.setInput((start_pt - map_origin_) / resolution_,
+                         (end_pt - map_origin_) / resolution_);
       Eigen::Vector2d half = Eigen::Vector2d(0.5, 0.5);
       Eigen::Vector2d ray_pt;
 
@@ -303,10 +298,7 @@ namespace path_searching
 
   void KinoAstar::ConvertNodePathToPointPath(vector<PathNodePtr> path_nodes_)
   {
-    Eigen::Vector2d start_pos = start_state_.head(2);
-    double tmp_len = 0.0;
-
-    for(int i = 0; i < path_nodes_.size(); i++)
+    for(size_t i = 0; i < path_nodes_.size(); i++)
     {
         Eigen::Vector2d pos = path_nodes_[i]->state.head(2);
         final_path_.push_back(pos);
@@ -316,7 +308,6 @@ namespace path_searching
   int KinoAstar::search(Eigen::Vector4d start_state, Eigen::Vector2d init_ctrl,
                                Eigen::Vector4d end_state)
   {
-    bool isocc = false;
     ros::Time t1 = ros::Time::now();
     final_path_.clear();
 
@@ -411,7 +402,7 @@ namespace path_searching
         double original_length = 0.0;
         std::vector<double> curvatures;
         std::vector<double> distance;
-        for(int i = 1; i < final_path_.size(); i++) {
+        for(size_t i = 1; i < final_path_.size(); i++) {
             original_length += (final_path_[i] - final_path_[i-1]).norm();
         }
         for(size_t i = 1; i < final_path_.size()-1; i++) {
@@ -496,6 +487,9 @@ namespace path_searching
 
         Eigen::Vector3d xt;
         bool is_occ = false;
+        double obstacle_cost = 0.0;
+        const double sample_length = std::fabs(input[1]) / check_num_;
+        const double max_soft_cost = std::max(1, occupied_threshold_ - 1);
         for (int k = 1; k <= check_num_; ++k)
         {
           double tmparc = input[1] * double(k) / double(check_num_);
@@ -506,6 +500,10 @@ namespace path_searching
             is_occ = true;
             break;
           }
+          const double normalized_cost =
+              std::max(0, getVoxelState2d(xt_pos)) / max_soft_cost;
+          obstacle_cost += obstacle_cost_weight_ * normalized_cost
+              * normalized_cost * sample_length;
         }
         if (is_occ)  continue;
         /* ---------- compute cost ---------- */
@@ -523,6 +521,7 @@ namespace path_searching
         }
         tmp_g_score += traj_steer_penalty * std::fabs(input[0]) * std::fabs(input[1]);
         tmp_g_score += traj_steer_change_penalty * std::fabs(input[0]-cur_node->input[0]);
+        tmp_g_score += obstacle_cost;
         tmp_g_score += cur_node->g_score;
 
         tmp_f_score = tmp_g_score + lambda_heu_ * getHeu(pro_state, end_state);
@@ -579,11 +578,8 @@ namespace path_searching
   bool KinoAstar::is_shot_sucess(Eigen::Vector3d state1,Eigen::Vector3d state2){
     
     std::vector<Eigen::Vector3d> path_list;
-    double len,st;
-    double ct1 = ros::Time::now().toSec();
-    st = computeShotTraj(state1,state2,path_list,len);
-    double ct2 = ros::Time::now().toSec();
-    bool is_occ = false;
+    double len;
+    computeShotTraj(state1,state2,path_list,len);
     // double t1 = ros::Time::now().toSec();
     for(unsigned int i = 0; i < path_list.size(); ++i){
         Eigen::Vector2d path_pos = path_list[i].head(2);

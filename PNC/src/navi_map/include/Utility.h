@@ -11,10 +11,13 @@
 #ifndef _UTILITY_H
 #define _UTILITY_H
 
-#include "ros/ros.h"
-#include <iostream>
+#include <cassert>
 #include <fstream>
-#include "yaml-cpp/yaml.h"
+#include <iostream>
+#include <string>
+#include <vector>
+
+#include <yaml-cpp/yaml.h>
 
 using namespace std;
 
@@ -53,7 +56,7 @@ typedef struct MissionPoint{
 
 namespace YamlProcess{
 
-    void writeMpsTOYAML(std::vector<MissionPoint> mps, std::string yamlFile){
+    inline void writeMpsTOYAML(const std::vector<MissionPoint>& mps, const std::string& yamlFile){
         
         YAML::Node missionNode;
         YAML::Node missionList;
@@ -61,7 +64,7 @@ namespace YamlProcess{
         assert(missionList.IsNull());
         missionNode["mission_points"] = missionList;
 
-        for(auto mp: mps){
+        for(const auto& mp: mps){
             YAML::Node newNode;
             newNode["id"] = mp.id;
             newNode["point"].push_back(mp.x);
@@ -83,7 +86,7 @@ namespace YamlProcess{
         cout << yamlFile << endl;
     }
 
-    void readMpsFromYAML(std::vector<MissionPoint>& missionPoints, std::string yamlFile){
+    inline void readMpsFromYAML(std::vector<MissionPoint>& missionPoints, const std::string& yamlFile){
         YAML::Node missionNode;
         try
         {

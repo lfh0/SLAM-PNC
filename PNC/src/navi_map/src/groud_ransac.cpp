@@ -3,15 +3,12 @@
 #include <pcl/point_types.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/filters/passthrough.h>
-#include <pcl/filters/extract_indices.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/common/centroid.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <pcl/common/common.h>
-#include <Eigen/Dense>
+#include <Eigen/Core>
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl/filters/statistical_outlier_removal.h>
-#include <pcl/filters/voxel_grid.h>
 
 int main(int argc, char** argv)
 {
@@ -64,7 +61,6 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    pcl::PointCloud<pcl::PointXYZ> cloud_output;
     // 滤波：移除离群点（可选）
     pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
     sor.setInputCloud(cloud_z);
@@ -112,15 +108,6 @@ int main(int argc, char** argv)
     // 3)（可选）用内点做一次最小二乘重拟合，得到更稳的法向
     Eigen::Vector4f centroid;
     pcl::compute3DCentroid(*cloud_z, *inliers, centroid);
-    Eigen::MatrixXf A(inliers->indices.size(), 3);
-    Eigen::VectorXf bvec(inliers->indices.size());
-    for (size_t i=0; i<inliers->indices.size(); ++i) {
-        const auto &pt = cloud_z->points[inliers->indices[i]];
-        A.row(i) << pt.x, pt.y, 1.f;
-        bvec(i) = -pt.z; // z = -(a x + b y + d)/c，如果c≈1可线性近似
-    }
-    // 最小二乘：min ||A*[ax,by,d]^T - b||
-    Eigen::Vector3f x = A.colPivHouseholderQr().solve(bvec);
     // 近似法向（归一化）
     Eigen::Vector3f n(0, 0, 1.f);
     n.normalize();
@@ -130,15 +117,7 @@ int main(int argc, char** argv)
 
 
     // 4) 基于内点，把“全量”点云分为地面/非地面
-    pcl::ExtractIndices<pcl::PointXYZ> extract;
-    extract.setInputCloud(cloud);
-    extract.setIndices(inliers);          // 注意：inliers 是在 cloud_z 的索引
-    extract.setNegative(false);
     pcl::PointCloud<pcl::PointXYZ>::Ptr ground(new pcl::PointCloud<pcl::PointXYZ>);
-    extract.filter(*ground);
-
-    // 把 inliers 对应到原始 cloud 的做法：简单途径是重跑一次“距离阈值分类”
-    // 这里为了简洁，直接对原始 cloud 按平面距离做一次筛选：
     pcl::PointCloud<pcl::PointXYZ>::Ptr nonground(new pcl::PointCloud<pcl::PointXYZ>);
     ground->clear();
     for (const auto& p : cloud->points) {

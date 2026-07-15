@@ -1,10 +1,9 @@
 #ifndef RAYCAST_H_
 #define RAYCAST_H_
 
-#include <Eigen/Eigen>
+#include <Eigen/Core>
 #include <cmath>
 #include <limits>
-#include <vector>
 
 inline double signum(double x)
 {

@@ -5,7 +5,9 @@ search:
 
   # A* / JPS / 混合A* 通用搜索参数
   lambda_heu: 1.0001
-  occupied_threshold: 5
+  # 99～100为硬碰撞区，1～98作为可通行的软膨胀代价区。
+  occupied_threshold: 80
+  obstacle_cost_weight: 5.0
   unknown_as_occupied: true
   allocate_num: 3000000
   max_search_time: 50000.0

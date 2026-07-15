@@ -1,57 +1,22 @@
-/**************************************************************************
- * PalnningServer.cpp
- * 
- * @Author： RobotTeam
- * @Date: 2022.03.29
- * 
- * @Description:
- *  本程序是无人车导航总体规划服务器,其主要职能包括:
- * 1. 引用全局规划模块执行全局规划 注意所有全局规划器都应该继承GlobalPlanner基类，以实现模块有效替换
- * 2. 引用局部规划模块执行局部规划 
- * 3. 引用轨迹优化模块进行轨迹优化
- * 4. 执行轨迹检测与重规划replan()
- *  
- *【订阅】: "/robot_state" 车辆的状态
- *【订阅】: odom_topic 小车里程计数据
- *【订阅】: 目标点信息
- *【订阅】: 全局地图信息
- *【订阅】: 局部地图信息
- *【发布】: 优化后的轨迹　to TrajServer
- *  ****************************************************/
-
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/PoseArray.h>
-#include <ros/package.h>
-#include <tf/transform_broadcaster.h>
 #include <tf/transform_datatypes.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
-#include <front2end_search/SendPath.h>
-#include <Eigen/Eigen>
-#include <Eigen/Dense> 
 #include <Eigen/Core>
-#include <google/protobuf/io/zero_copy_stream_impl.h>
-#include <google/protobuf/text_format.h>
-#include <ackermann_msgs/AckermannDrive.h>
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <mutex>
+#include <string>
+#include <vector>
 
-#include "plan_manage/traj_optimizer.h"
 #include "path_searching/kino_astar.h"
 #include "path_searching/astar.h"
 #include "path_searching/jps.h"
 #include "path_searching/rrt.h"
-#include "decomp_util/ellipsoid_decomp.h"
-#include "decomp_ros_utils/data_ros_utils.h"
-
-#include "Utility.h"
-#include "smoother.hpp"
-
-#define T 1/freq //采样时间
 
 class Color : public std_msgs::ColorRGBA {
 public:
@@ -120,80 +85,35 @@ private:
     ros::NodeHandle nh_;
 
     ros::Subscriber globalMapSub_;
-    ros::Subscriber localMapSub_;
     ros::Subscriber goalSub_;
     ros::Subscriber odomSub_;
 
-    ros::Publisher missionPub_;
     ros::Publisher kinoPathPub_;
     ros::Publisher AstarPathPub_;
     ros::Publisher JPSPathPub_;
     ros::Publisher RRTPathPub_;
 
-    ros::Publisher waypointshowPub_;
-    ros::Publisher KinopathPub_;
-    ros::Publisher minco_traj_pub_;
-    ros::Publisher Rectangle_poly_pub_;
-    ros::Publisher midpointshowPub_;
-    ros::Publisher LQRPathPub_;
     ros::Publisher mkr_pub;
 
-    ros::ServiceClient path_send_client_;
 
     nav_msgs::OccupancyGrid globalMap_;
-    nav_msgs::OccupancyGrid localMap_;
     nav_msgs::Odometry carOdom_;
     std::mutex odom_mutex_;
     bool has_odom_ = false;
     bool search_maps_dirty_ = false;
     // geometry_msgs::Pose goalPose_;
 
-    std::vector<MissionPoint> missionPoints_;
-    std::map<int, MissionPoint> missionMaps_;
-
-    // std::shared_ptr<AStarSearch> globalSearchMethod_;
-    nav_msgs::Path path_nodes;
-    nav_msgs::Path globalpath_;
-    ackermann_msgs::AckermannDrive vel_cmd;
     geometry_msgs::Quaternion goal_orientation_;
 
-    std::vector<Eigen::MatrixXd> hPolys_, display_hPolys_;
-    plan_utils::KinoTrajData kino_trajs_;
-    vector<Eigen::Vector2d> kino_path_;
+    std::vector<Eigen::Vector2d> kino_path_;
     
     std::unique_ptr<path_searching::KinoAstar> kino_path_finder_;
     std::unique_ptr<path_searching::Astar> astar_path_finder_;
     std::unique_ptr<path_searching::JPS> jps_path_finder_;
     std::unique_ptr<path_searching::RRT> rrt_path_finder_;
-    plan_utils::TrajContainer traj_container_;
-
-    int targetId_;
-    double MAX_VEL;
-    int traj_res_;
-    int dense_traj_res_;
-    double car_width_;
-    double car_length_;
-    double car_d_cr_;
 
     double resolution_;
-    double resolution_inv_;
-    vector<double> occupancy_buffer_2d_;
-    Eigen::Vector2i global_map_size_;
-    Eigen::Vector2d map_origin_;
     double start_time_;
-    double inv_resolution_;
-
-    double Q[3];
-	double R[2];
-    vector<double> Q_set;
-    vector<double> R_set;
-    bool limit_v_and_kesi;//是否限幅(对于阿卡曼转向车辆需要限幅，全向车倒还好)
-    int lastIndex;//最后一个点索引值
-    double freq;//采样频率
-    double v_max;//最大速度
-    double vehicle_vel_;
-    double L;
-    ackermann_msgs::AckermannDrive cmd_;
     std::vector<double> astar_search_window_retry_margins_;
     std::string map_topic_;
     std::string odom_topic_;
@@ -205,48 +125,23 @@ private:
     void map_init();
     void syncSearchMaps();
     void globalMapCallBack(const nav_msgs::OccupancyGrid::ConstPtr &msg);
-    void localMapCallBack(const nav_msgs::OccupancyGrid::Ptr &msg);
     void goalCallBack(const geometry_msgs::PoseStamped::ConstPtr &msg);
     void odomCallBack(const nav_msgs::OdometryConstPtr &msg);
     
     void publishPointWithText(const Eigen::Vector2d& p, const std::string& text, const Color c);
-    float inSet(std::multimap<float, std::vector<int> >& set, int id, bool earse);
-    float callDis(int id1, int id2);
-    void backSet(int targetId,  std::multimap<float, std::vector<int> > set, std::vector<int>& route);
-    void RuninPath(nav_msgs::Path path_node);
-    void GetCloestLineEndPoint();
-    void getRectangleConst(std::vector<Eigen::Vector3d> statelist);
-    void checkCollisionUsingLine(const Eigen::Vector2d &start_pt, const Eigen::Vector2d &end_pt, bool &res);
     void runSelectedSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     void updatePathOrientations(nav_msgs::Path& path_msg);
 
 public:
-    void LQRpursuit(Eigen::Vector3d pos, double vel, double steer);
     PlanningServer(ros::NodeHandle nh, ros::NodeHandle nhPrivate);
-    void carTrack(plan_utils::SingulTrajData traj);
-    void carTrackbyVel(plan_utils::SingulTrajData traj);
-    void Plan(float dis);
     bool PlanbySearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     bool PlanbyAstarSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     bool PlanbyJPSSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     bool PlanbyRRTSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
-    bool RunMINCOParking(double duration);
-    void displayMincoTraj(plan_utils::SingulTrajData display_traj);
-    void displayKinoPath(plan_utils::KinoTrajData kino_trajs);
-    void displayPolyH(const std::vector<Eigen::MatrixXd> hPolys);
-    void displayPoint(const std::vector<Eigen::Vector3d> points);
-    void displayKinoPath(vector<Eigen::Vector2d> final_path);
-    void displayAstarPath(vector<Eigen::Vector2d> final_path);
-    void displayJPSPath(vector<Eigen::Vector2d> final_path);
-    void displayRRTPath(vector<Eigen::Vector2d> final_path);
-
-    std::vector<int> routeSearch(int startId, int targetId);
-
-    
-    void posToIndex2d(const Eigen::Vector2d& pos, Eigen::Vector2i& id);
-    void indexToPos2d(const Eigen::Vector2i& id, Eigen::Vector2d& pos);
-    bool isInMap2d(const Eigen::Vector2d &pos);
-    bool isInMap2d(const Eigen::Vector2i &id);
+    void displayKinoPath(const std::vector<Eigen::Vector2d>& final_path);
+    void displayAstarPath(const std::vector<Eigen::Vector2d>& final_path);
+    void displayJPSPath(const std::vector<Eigen::Vector2d>& final_path);
+    void displayRRTPath(const std::vector<Eigen::Vector2d>& final_path);
 
     ~PlanningServer();
 };
@@ -255,19 +150,6 @@ PlanningServer::PlanningServer(ros::NodeHandle nh, ros::NodeHandle nhPrivate):
 nh_(nh)
 {
     goal_orientation_.w = 1.0;
-    nhPrivate.param("planner/traj_res_", traj_res_, 8);
-    nhPrivate.param("planner/dense_traj_res_", dense_traj_res_, 20);
-    nhPrivate.param("vehicle/car_length", car_length_, 2.054);
-    nhPrivate.param("vehicle/car_width", car_width_, 0.44);
-    nhPrivate.param("vehicle/car_d_cr", car_d_cr_, 0.0);
-    nhPrivate.param("planner/max_vel", MAX_VEL, 5.0);
-    nhPrivate.param<double>("freq",freq, 20);
-    nhPrivate.param<double>("Vel", vehicle_vel_, 2.0);
-    nhPrivate.param<double>("Length", L, 2.054);
-    nhPrivate.param<double>("v_max", v_max, 3.0);
-    nhPrivate.param<bool>("limit_v_and_kesi",limit_v_and_kesi,true);
-    nhPrivate.param("Q_set",Q_set,Q_set);
-    nhPrivate.param("R_set",R_set,R_set);
     std::vector<double> default_astar_retry_margins = {20.0, 50.0, 100.0};
     nh_.param("search/search_window_retry_margins",
               astar_search_window_retry_margins_,
@@ -294,23 +176,14 @@ nh_(nh)
 
 
     globalMapSub_ = nh_.subscribe<nav_msgs::OccupancyGrid>(map_topic_, 10, &PlanningServer::globalMapCallBack, this);
-    localMapSub_ = nh_.subscribe("/local_map", 10, &PlanningServer::localMapCallBack, this);
-
     goalSub_ = nh_.subscribe("/move_base_simple/goal", 1, &PlanningServer::goalCallBack, this);
     odomSub_ = nh_.subscribe<nav_msgs::Odometry>(odom_topic_, 10, &PlanningServer::odomCallBack, this);
 
-    missionPub_ = nh_.advertise<geometry_msgs::PoseArray>("/mission_points", 1);
     kinoPathPub_ = nh_.advertise<nav_msgs::Path>("kino_path", 10);
     AstarPathPub_ = nh_.advertise<nav_msgs::Path>("astar_path", 10);
     JPSPathPub_ = nh_.advertise<nav_msgs::Path>("jps_path", 10);
     RRTPathPub_ = nh_.advertise<nav_msgs::Path>("rrt_path", 10);
 
-    waypointshowPub_ = nh_.advertise<visualization_msgs::MarkerArray>("/planner/waypoints", 10);
-    midpointshowPub_ = nh_.advertise<visualization_msgs::MarkerArray>("/planner/midpoints", 10);
-    
-    KinopathPub_ = nh_.advertise<visualization_msgs::Marker>("car_kino_trajs", 10);
-    minco_traj_pub_ = nh_.advertise<nav_msgs::Path>("/planner/minco_traj", 2);
-    Rectangle_poly_pub_ = nh_.advertise<decomp_ros_msgs::PolyhedronArray>("/planner/polyhedrons", 1);
     mkr_pub = nh_.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 1);
 
     // TODO
@@ -333,10 +206,6 @@ PlanningServer::~PlanningServer(){}
 void PlanningServer::globalMapCallBack(const nav_msgs::OccupancyGrid::ConstPtr &msg){
     globalMap_ = *msg;
     search_maps_dirty_ = true;
-}
-
-void PlanningServer::localMapCallBack(const nav_msgs::OccupancyGrid::Ptr &msg){
-    localMap_ = *msg;
 }
 
 void PlanningServer::odomCallBack(const nav_msgs::OdometryConstPtr &msg){
@@ -577,7 +446,7 @@ bool PlanningServer::PlanbyRRTSearch(Eigen::Vector3d start_pt, Eigen::Vector3d e
 }
 
 
-void PlanningServer::displayKinoPath(vector<Eigen::Vector2d> final_path)
+void PlanningServer::displayKinoPath(const std::vector<Eigen::Vector2d>& final_path)
 {
     nav_msgs::Path path_msg;
     geometry_msgs::PoseStamped tmpPose;
@@ -593,7 +462,7 @@ void PlanningServer::displayKinoPath(vector<Eigen::Vector2d> final_path)
 
     kinoPathPub_.publish(path_msg);
 }
-void PlanningServer::displayAstarPath(vector<Eigen::Vector2d> final_path)
+void PlanningServer::displayAstarPath(const std::vector<Eigen::Vector2d>& final_path)
 {
     nav_msgs::Path path_msg;
     geometry_msgs::PoseStamped tmpPose;
@@ -608,7 +477,7 @@ void PlanningServer::displayAstarPath(vector<Eigen::Vector2d> final_path)
     updatePathOrientations(path_msg);
     AstarPathPub_.publish(path_msg);
 }
-void PlanningServer::displayJPSPath(vector<Eigen::Vector2d> final_path)
+void PlanningServer::displayJPSPath(const std::vector<Eigen::Vector2d>& final_path)
 {
     nav_msgs::Path path_msg;
     geometry_msgs::PoseStamped tmpPose;
@@ -623,7 +492,7 @@ void PlanningServer::displayJPSPath(vector<Eigen::Vector2d> final_path)
     updatePathOrientations(path_msg);
     JPSPathPub_.publish(path_msg);
 }
-void PlanningServer::displayRRTPath(vector<Eigen::Vector2d> final_path)
+void PlanningServer::displayRRTPath(const std::vector<Eigen::Vector2d>& final_path)
 {
     nav_msgs::Path path_msg;
     geometry_msgs::PoseStamped tmpPose;
@@ -686,85 +555,6 @@ void PlanningServer::updatePathOrientations(nav_msgs::Path& path_msg)
     }
 
     path_msg.poses.back().pose.orientation = goal_orientation_;
-}
-
-void PlanningServer::displayPoint(const std::vector<Eigen::Vector3d> points)
-{
-    visualization_msgs::Marker waypoint;
-    visualization_msgs::MarkerArray waypoints_array;
-    waypoints_array.markers.clear();
-    for(int i = 0; i < points.size(); i++){
-        waypoint.id = i;
-        waypoint.header.stamp = ros::Time::now();
-        waypoint.header.frame_id = "map";
-        waypoint.type = visualization_msgs::Marker::SPHERE;
-        // waypoint.action = visualization_msgs::Marker::ADD;
-        waypoint.color.r = 0.0;
-        waypoint.color.g = 255.0;
-        waypoint.color.b = 255.0;
-        waypoint.color.a = 1.0;
-        waypoint.scale.x = 0.5;
-        waypoint.scale.y = 0.5;
-        waypoint.scale.z = 0.5;
-        waypoint.pose.position.x = points[i][0];
-        waypoint.pose.position.y = points[i][1];
-        waypoint.pose.position.z = 0;
-        waypoints_array.markers.push_back(waypoint);
-    }
-    // cout << " size:  " << waypoints_array.markers.size() << endl;
-    midpointshowPub_.publish(waypoints_array);
-}
-
-void PlanningServer::displayKinoPath(plan_utils::KinoTrajData kino_trajs)
-{
-    visualization_msgs::Marker sphere, line_strip, carMarkers;
-  sphere.header.frame_id = line_strip.header.frame_id = carMarkers.header.frame_id = "map";
-  sphere.header.stamp = line_strip.header.stamp = carMarkers.header.stamp = ros::Time::now();
-  sphere.type = visualization_msgs::Marker::SPHERE_LIST;
-  line_strip.type = visualization_msgs::Marker::LINE_STRIP;
-  // carMarkers.type = visualization_msgs::Marker::LINE_LIST;
-
-  sphere.action = visualization_msgs::Marker::DELETE;
-  line_strip.action = visualization_msgs::Marker::DELETE;
-  // carMarkers.action = visualization_msgs::Marker::DELETE;
-
-  KinopathPub_.publish(sphere);
-  KinopathPub_.publish(line_strip);
-  // path_pub.publish(carMarkers);
-
-  sphere.action = line_strip.action = carMarkers.action = visualization_msgs::Marker::ADD;
-  sphere.id = 0;
-  line_strip.id = 1000;
-
-  sphere.pose.orientation.w = line_strip.pose.orientation.w = 1.0;
-  sphere.color.a = line_strip.color.a = 0.5;
-  sphere.scale.x = 0.5;
-  sphere.scale.y = 0.5;
-  sphere.scale.z = 0.5;
-  line_strip.scale.x = 0.25;
-
-  geometry_msgs::Point pt;
-  unsigned int size = kino_trajs.size();
-  for (unsigned int i = 0; i < size; ++i){
-    sphere.color.r = line_strip.color.r = i*1.0/(size*1.0);
-    sphere.color.g = line_strip.color.g = 0.0;
-    sphere.color.b = line_strip.color.b = i*1.0/(size*1.0);
-
-    for (int k = 0; k < kino_trajs.at(i).traj_pts.size(); k++)
-    {
-      Eigen::Vector3d trajpt = kino_trajs.at(i).traj_pts[k];
-      double yaw = kino_trajs.at(i).thetas[k];
-      pt.x = trajpt(0);
-      pt.y = trajpt(1);
-      pt.z = 0.1;
-      sphere.points.push_back(pt);
-      line_strip.points.push_back(pt);
-
-    }
-  }
-
-  KinopathPub_.publish(sphere);
-  KinopathPub_.publish(line_strip);
 }
 
 int main(int argc, char** argv){

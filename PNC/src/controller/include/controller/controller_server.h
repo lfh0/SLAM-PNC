@@ -1,7 +1,6 @@
 #pragma once
 
 #include <ros/ros.h>
-#include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <std_msgs/Bool.h>
@@ -59,7 +58,7 @@ private:
     int finish_average_frames_ = 20;
     bool path_reset_ = false;
     bool odom_received_ = false;
-    bool start_ = false;
+    bool start_ = true;
     bool arrive_reported_ = false;
     bool has_goal_point_ = false;
     bool collecting_finish_odom_ = false;

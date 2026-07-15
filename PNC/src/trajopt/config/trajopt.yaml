@@ -8,22 +8,23 @@ topics:
   local_map: "/local_costmap_node/costmap/costmap"
   odom: "/lio/robo/odom"
   path: "/astar_path"
+  debug_path: "/trajopt/debug_path"
+  path_endpoints: "/trajopt/path_endpoints"
 
 # 安全走廊参数
 corridor:
-  collision_cost_threshold: 80
+  collision_cost_threshold: 90
   unknown_as_occupied: true
   # 每条路径段前后和左右允许生成走廊的最大范围
-  max_longitudinal: 0.2
-  max_lateral: 0.6
-  # 先简化A*路径，再按几何约束拆分或合并路径段
-  rdp_epsilon: 0.08
+  max_longitudinal: 1.5
+  max_lateral: 1.5
+  # 按几何约束一次完成路径段拆分和合并
   min_seed_length: 0.25
-  max_seed_length: 0.8
+  max_seed_length: 2.0
   max_seed_deviation: 0.1
   max_seed_yaw_error: 0.2
-  # 相邻凸走廊在公共关键点处要求的最小内部余量
-  min_overlap_clearance: 0.05
+  # 相邻凸走廊真实交集的最小面积，单位m²
+  min_overlap_area: 0.01
 
 # MINCO 优化参数
 optimizing:
@@ -41,6 +42,17 @@ optimizing:
   min_acc: -1.5
   max_cur: 0.523598
   half_margin: 0.25
+
+# MINCO 初始时间分配参数
+initial_time:
+  min_speed: 0.2
+  min_piece_time: 0.2
+  min_turn_speed_ratio: 0.25
+
+# 优化结果发布前验收参数
+validation:
+  sample_period: 0.02
+  corridor_tolerance: 0.0001
 
 # 车辆模型参数
 vehicle:

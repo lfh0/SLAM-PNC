@@ -7,12 +7,15 @@ namespace plan_manage
   bool PolyTrajOptimizer::OptimizeTrajectory(
       const std::vector<Eigen::MatrixXd> &iniStates, const std::vector<Eigen::MatrixXd> &finStates,
       std::vector<Eigen::MatrixXd> &initInnerPts, const Eigen::VectorXd &initTs,
-      std::vector<std::vector<Eigen::MatrixXd>> &hPoly_container,std::vector<int> singuls,double now, double help_eps)
+      std::vector<std::vector<Eigen::MatrixXd>> &hPoly_container,
+      const std::vector<Eigen::VectorXd> &pieceTimeRatios,
+      std::vector<int> singuls,double now, double help_eps)
   {
     // 中间点
     trajnum = initInnerPts.size();//1
     epis = help_eps;
     cfgHs_container = hPoly_container;
+    piece_time_ratios_container = pieceTimeRatios;
     iniState_container = iniStates;
     finState_container = finStates;
     singul_container = singuls; //1
@@ -27,6 +30,10 @@ namespace plan_manage
       ROS_ERROR("initTs.size()!=trajnum");
       return false;
     }
+    if(piece_time_ratios_container.size()!=static_cast<size_t>(trajnum)){
+      ROS_ERROR("pieceTimeRatios.size()!=trajnum");
+      return false;
+    }
     for(int i = 0; i < trajnum; i++){
       //check
       if(initInnerPts[i].cols()==0){
@@ -37,6 +44,12 @@ namespace plan_manage
       int piece_num_ = initInnerPts[i].cols() + 1;
       cout << "piece_num_: " << piece_num_ << endl;
       piece_num_container[i] = piece_num_;
+      if(piece_time_ratios_container[i].size()!=piece_num_
+          || (piece_time_ratios_container[i].array() <= 0.0).any()){
+        ROS_ERROR("第 %d 条轨迹的分段时间比例无效", i);
+        return false;
+      }
+      piece_time_ratios_container[i] /= piece_time_ratios_container[i].sum();
       std::cout<<"cfgHs size: "<< cfgHs_container[i].size()<<std::endl;
       if(cfgHs_container[i].size()!=(piece_num_ - 2) * (traj_resolution_ + 1) + 2 * (destraj_resolution_ + 1)){
         std::cout<<"cfgHs size: "<< cfgHs_container[i].size()<<std::endl;
@@ -200,7 +213,7 @@ namespace plan_manage
     for(int trajid = 0; trajid < opt->trajnum; trajid++){
       Eigen::VectorXd arraygradT(opt->piece_num_container[trajid]);
       Eigen::VectorXd arrayT(opt->piece_num_container[trajid]);
-      arrayT.setConstant(T[trajid]/opt->piece_num_container[trajid]);
+      arrayT = T[trajid] * opt->piece_time_ratios_container[trajid];
       arraygradT.setZero();
       arrayT_container.push_back(arrayT);
       arraygradT_container.push_back(arraygradT);
@@ -256,7 +269,8 @@ namespace plan_manage
       // gradt[trajid] = arraygradt_container[trajid].sum();
       // std::cout<<"trajid: "<<trajid<<" grad: "<<gradt_container[trajid].transpose()<<std::endl;
       double gradsumT,gradsumt;
-      gradsumT = arraygradT_container[trajid].sum() / arraygradT_container[trajid].size();
+      gradsumT = arraygradT_container[trajid].dot(
+          opt->piece_time_ratios_container[trajid]);
       opt->VirtualTGradCost(T[trajid],t[trajid],gradsumT,gradsumt,time_cost);
       gradt[trajid] = gradsumt;
       total_timecost += time_cost;
@@ -353,7 +367,6 @@ namespace plan_manage
     // 任取其中一段， M = 6， K = 31， T = 6.3825
     int M = gdTs[trajid].size();                         // number of pieces
     double T = jerkOpt_container[trajid].get_T1().sum(); // total duration of the trajectory
-    double delta_T = T / M;                              // time duration of one piece
     int K = std::floor(T / delta_t_);                    // number of constrain points
     // cout << "number of pieces: " << M << " number of constrain points: " << K << " total time: " << T << endl;
 
@@ -387,17 +400,23 @@ namespace plan_manage
 
       //--- locate piece id: i ---
       int i = 0;
+      double piece_start_time = 0.0;
       for(i = 0; i < M; i++)
       {
-        if(constrain_pt_t > delta_T * i - 1e-3 && constrain_pt_t < delta_T * (i + 1) + 1e-3)
+        const double piece_end_time = piece_start_time
+            + jerkOpt_container[trajid].get_T1()(i);
+        if(constrain_pt_t <= piece_end_time + 1.0e-9 || i == M - 1)
           break;
+        piece_start_time = piece_end_time;
       }
       /**************************/
       int time_int_pena = (j == K + 1) ? 1 : (-i);
       // cout << time_int_pena << endl;
       // int time_int_pena = -i;
 
-      double t_bar = constrain_pt_t - i * delta_T;
+      double t_bar = std::max(0.0, std::min(
+          jerkOpt_container[trajid].get_T1()(i),
+          constrain_pt_t - piece_start_time));
       //c是系数矩阵，也就是通过求解M * c = b得到，其中M为可逆带状矩阵
       const Eigen::Matrix<double, 6, 2> &c = jerkOpt_container[trajid].get_b().block<6, 2>(i * 6, 0);
       

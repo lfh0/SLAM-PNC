@@ -243,6 +243,7 @@ void ROSWrapper::livoxGenericHandler(const topic_tools::ShapeShifter::ConstPtr& 
   const std::string livox_md5 = ros::message_traits::MD5Sum<livox_ros_driver::CustomMsg>::value();
 
   if (datatype != "livox_ros_driver/CustomMsg" &&
+      datatype != "livox_ros_driver2/CustomMsg" &&
       datatype != "livox_laser_simulation/CustomMsg") {
     ROS_WARN_STREAM_THROTTLE(5.0, "Unsupported Livox message type: " << datatype);
     return;

@@ -74,6 +74,7 @@ namespace plan_manage
     std::vector<Eigen::MatrixXd> iniState_container;
     std::vector<Eigen::MatrixXd> finState_container;
     std::vector<std::vector<Eigen::MatrixXd>> cfgHs_container;
+    std::vector<Eigen::VectorXd> piece_time_ratios_container;
     int trajnum;//轨迹只有一条，所以trajnum = 1
     /*debug*/
     Eigen::MatrixXd ctrl_points_;
@@ -111,7 +112,9 @@ namespace plan_manage
     /* main planning API */
     bool OptimizeTrajectory(const std::vector<Eigen::MatrixXd> &iniStates, const std::vector<Eigen::MatrixXd> &finStates,
                             std::vector<Eigen::MatrixXd> &initInnerPts, const Eigen::VectorXd &initTs,
-                            std::vector<std::vector<Eigen::MatrixXd>> &hPoly_container,std::vector<int> singuls,double now = ros::Time::now().toSec(),double help_eps = 1.0e-4);
+                            std::vector<std::vector<Eigen::MatrixXd>> &hPoly_container,
+                            const std::vector<Eigen::VectorXd> &pieceTimeRatios,
+                            std::vector<int> singuls,double now = ros::Time::now().toSec(),double help_eps = 1.0e-4);
 
 
     double log_sum_exp(double alpha, Eigen::VectorXd &all_dists, double &exp_sum);

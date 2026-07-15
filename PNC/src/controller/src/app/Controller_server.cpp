@@ -8,6 +8,7 @@
 #include <cmath>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 
 ControllerServer::ControllerServer(ros::NodeHandle nh, ros::NodeHandle nh_private)
     : nh_(nh), pure_pursuit_(nh)
@@ -70,6 +71,8 @@ void ControllerServer::loadParams()
     nh_.param("controller_server/cmd_vel_topic", cmd_vel_topic_, std::string("/cmd_vel"));
     nh_.param("controller_server/sim_cmd_vel_topic", sim_cmd_vel_topic_, std::string("/car1/cmd_vel"));
     nh_.param("controller_server/arrive_topic", arrive_topic_, std::string("/arrive/finish"));
+    nh_.param("controller_server/odom_path_topic", odom_path_topic_,
+              std::string("/controller/odom_path"));
     nh_.param("controller_server/finish_error_log_path",
               finish_error_log_path_,
               std::string("/home/lfh/SLAM+PNC/PNC/src/controller/finish_error_log.txt"));
@@ -91,10 +94,20 @@ void ControllerServer::setupRosIo()
     pub_cmd_ = nh_.advertise<geometry_msgs::Twist>(cmd_vel_topic_, 1);
     pub_sim_cmd_ = nh_.advertise<geometry_msgs::Twist>(sim_cmd_vel_topic_, 1);
     pub_arrive_ = nh_.advertise<std_msgs::Bool>(arrive_topic_, 1);
+    pub_odom_path_ = nh_.advertise<nav_msgs::Path>(odom_path_topic_, 1, true);
 }
 
 void ControllerServer::pathCallback(const nav_msgs::Path::ConstPtr& msg)
 {
+    // 新控制路径对应一次新的跟踪过程，清空并立即发布空的历史里程计轨迹。
+    odom_path_.poses.clear();
+    odom_path_.header.frame_id = msg->header.frame_id.empty()
+        ? std::string("map") : msg->header.frame_id;
+    odom_path_.header.stamp = ros::Time::now();
+    has_last_odom_path_point_ = false;
+    odom_path_active_ = true;
+    pub_odom_path_.publish(odom_path_);
+
     path_reset_ = pure_pursuit_.reset(*msg);
     start_ = false;
     if (path_reset_) {
@@ -119,6 +132,25 @@ void ControllerServer::odomCallback(const nav_msgs::Odometry::ConstPtr& msg)
     robot_state_.linear_velocity = msg->twist.twist.linear.x;
     robot_state_.angular_velocity = msg->twist.twist.angular.z;
     odom_received_ = true;
+
+    const auto& current_point = msg->pose.pose.position;
+    const double distance = has_last_odom_path_point_
+        ? std::hypot(current_point.x - last_odom_path_point_.x,
+                     current_point.y - last_odom_path_point_.y)
+        : std::numeric_limits<double>::infinity();
+    if (odom_path_active_ && distance >= 0.01) {
+        geometry_msgs::PoseStamped pose;
+        pose.header = msg->header;
+        pose.pose = msg->pose.pose;
+        odom_path_.header.frame_id = msg->header.frame_id.empty()
+            ? std::string("map") : msg->header.frame_id;
+        odom_path_.header.stamp = msg->header.stamp;
+        odom_path_.poses.push_back(pose);
+        last_odom_path_point_ = current_point;
+        has_last_odom_path_point_ = true;
+        pub_odom_path_.publish(odom_path_);
+    }
+
     collectFinishOdomSample(robot_state_);
 }
 

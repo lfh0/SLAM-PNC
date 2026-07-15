@@ -37,15 +37,19 @@ private:
     ros::Publisher pub_cmd_;
     ros::Publisher pub_sim_cmd_;
     ros::Publisher pub_arrive_;
+    ros::Publisher pub_odom_path_;
     std::string path_topic_;
     std::string odom_topic_;
     std::string start_topic_;
     std::string cmd_vel_topic_;
     std::string sim_cmd_vel_topic_;
     std::string arrive_topic_;
+    std::string odom_path_topic_;
     std::string finish_error_log_path_;
     RobotState robot_state_;
     PathPoint goal_point_;
+    nav_msgs::Path odom_path_;
+    geometry_msgs::Point last_odom_path_point_;
     std::vector<RobotState> finish_odom_samples_;
 
     std::string controller_type_;
@@ -63,4 +67,6 @@ private:
     bool has_goal_point_ = false;
     bool collecting_finish_odom_ = false;
     bool finish_log_written_ = false;
+    bool has_last_odom_path_point_ = false;
+    bool odom_path_active_ = false;
 };

@@ -10,10 +10,9 @@
 #include <iomanip>
 #include <limits>
 
-ControllerServer::ControllerServer(ros::NodeHandle nh, ros::NodeHandle nh_private)
+ControllerServer::ControllerServer(ros::NodeHandle nh)
     : nh_(nh), pure_pursuit_(nh)
 {
-    (void)nh_private;
     loadParams();
     setupRosIo();
 }
@@ -288,9 +287,7 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "controller_server");
 
     ros::NodeHandle nh;
-    ros::NodeHandle nh_private("~");
-
-    ControllerServer server(nh, nh_private);
+    ControllerServer server(nh);
 
     server.spin();
     return 0;

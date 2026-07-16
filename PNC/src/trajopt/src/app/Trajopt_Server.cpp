@@ -34,7 +34,6 @@ private:
     ros::NodeHandle nh_;
 
     ros::Subscriber globalMapSub_;
-    ros::Subscriber localMapSub_;
     ros::Subscriber odomSub_;
     ros::Subscriber pathSub_;
 
@@ -44,14 +43,11 @@ private:
     ros::Publisher Rectangle_poly_pub_;
 
 
-    ros::Publisher missionPub_;
-    ros::Publisher globalTrajPub_;
     ros::Publisher midpointshowPub_;
 
     ros::ServiceClient path_send_client_;
 
     nav_msgs::OccupancyGrid globalMap_;
-    nav_msgs::OccupancyGrid localMap_;
     RobotState robot_state_;
 
     // 前端搜索直接输出的路径
@@ -61,7 +57,6 @@ private:
     plan_manage::PolyTrajOptimizer::Ptr ploy_traj_opt_;
     plan_utils::TrajContainer traj_container_;
 
-    int targetId_;
     int corridor_collision_threshold_;
     bool corridor_unknown_as_occupied_;
     double corridor_max_longitudinal_;
@@ -85,10 +80,9 @@ private:
 
 private:
     void globalMapCallBack(const nav_msgs::OccupancyGrid::ConstPtr &msg);
-    void localMapCallBack(const nav_msgs::OccupancyGrid::Ptr &msg);
     void odomCallBack(const nav_msgs::OdometryConstPtr &msg);
     void pathCallBack(const nav_msgs::Path::ConstPtr &msg);
-    
+
     bool generateSafeCorridor(const nav_msgs::Path& path,
                               std::vector<Eigen::Vector3d>& key_points);
     bool checkCollisionUsingLine(const Eigen::Vector2d& start_pt, const Eigen::Vector2d& end_pt) const;
@@ -96,7 +90,7 @@ private:
 
 
 public:
-    TrajoptServer(ros::NodeHandle nh, ros::NodeHandle nhPrivate);
+    explicit TrajoptServer(ros::NodeHandle nh);
     bool RunMINCOParking();
     void displayMincoTraj(plan_utils::SingulTrajData display_traj,
                           bool publish_to_controller = true);
@@ -107,7 +101,7 @@ public:
     ~TrajoptServer();
 };
 
-TrajoptServer::TrajoptServer(ros::NodeHandle nh, ros::NodeHandle nhPrivate)
+TrajoptServer::TrajoptServer(ros::NodeHandle nh)
 {
     nh_.param("corridor/collision_cost_threshold", corridor_collision_threshold_, 80);
     nh_.param("corridor/unknown_as_occupied", corridor_unknown_as_occupied_, true);
@@ -136,13 +130,11 @@ TrajoptServer::TrajoptServer(ros::NodeHandle nh, ros::NodeHandle nhPrivate)
     
     
     std::string global_map_topic;
-    std::string local_map_topic;
     std::string odom_topic;
     std::string path_topic;
     std::string debug_path_topic;
     std::string path_endpoints_topic;
     nh_.param<std::string>("topics/global_map", global_map_topic, "/global_costmap_node/costmap/costmap");
-    nh_.param<std::string>("topics/local_map", local_map_topic, "/local_map");
     nh_.param<std::string>("topics/odom", odom_topic, "/lio/odom");
     nh_.param<std::string>("topics/path", path_topic, "/front2end_search_path");
     nh_.param<std::string>("topics/debug_path", debug_path_topic, "/trajopt/debug_path");
@@ -150,7 +142,6 @@ TrajoptServer::TrajoptServer(ros::NodeHandle nh, ros::NodeHandle nhPrivate)
                            "/trajopt/path_endpoints");
     
     globalMapSub_ = nh_.subscribe<nav_msgs::OccupancyGrid>(global_map_topic, 10, &TrajoptServer::globalMapCallBack, this);
-    localMapSub_ = nh_.subscribe(local_map_topic, 10, &TrajoptServer::localMapCallBack, this);
     odomSub_ = nh_.subscribe<nav_msgs::Odometry>(odom_topic, 10, &TrajoptServer::odomCallBack, this);
     pathSub_ = nh_.subscribe<nav_msgs::Path>(path_topic, 10, &TrajoptServer::pathCallBack, this);
     
@@ -170,10 +161,6 @@ TrajoptServer::~TrajoptServer(){}
 
 void TrajoptServer::globalMapCallBack(const nav_msgs::OccupancyGrid::ConstPtr &msg){
     globalMap_ = *msg;
-}
-
-void TrajoptServer::localMapCallBack(const nav_msgs::OccupancyGrid::Ptr &msg){
-    localMap_ = *msg;
 }
 
 void TrajoptServer::odomCallBack(const nav_msgs::OdometryConstPtr &msg){
@@ -289,12 +276,13 @@ void TrajoptServer::displayMincoTraj(plan_utils::SingulTrajData display_traj,
             path_msg.poses.push_back(pose);
         }
     }
+    // 候选轨迹生成后先发布首尾位姿，便于观察验收失败轨迹的边界状态。
+    displayPathEndpoints(path_msg);
     if (!publish_to_controller) {
         debug_traj_pub_.publish(path_msg);
         return;
     }
     minco_traj_pub_.publish(path_msg);
-    displayPathEndpoints(path_msg);
 
     trajopt::SendPath sendpath;
     sendpath.request.path = path_msg;
@@ -837,8 +825,10 @@ bool TrajoptServer::RunMINCOParking()
     traj_container_.clearSingul();
     traj_container_.addSingulTraj(
         optimized_trajectory, ros::Time::now().toSec(), 0);
+    // 先发布候选轨迹及其首尾位姿，再执行发布前验收。
+    displayMincoTraj(traj_container_.singul_traj, false);
+
     if (!validateTrajectory(optimized_trajectory)) {
-        displayMincoTraj(traj_container_.singul_traj, false);
         ROS_ERROR("MINCO 轨迹未通过发布前验收，本次轨迹不会发送给控制器");
         return false;
     }
@@ -857,8 +847,7 @@ int main(int argc, char** argv){
     setlocale(LC_CTYPE, "zh_CN.utf8");
     ros::init(argc, argv, "trajopt_server");
     ros::NodeHandle nh;
-    ros::NodeHandle nhPrivate("~");
-    TrajoptServer trajoptServer(nh, nhPrivate);
+    TrajoptServer trajoptServer(nh);
     ros::Rate r(10);
     while (ros::ok())
     {

@@ -226,8 +226,7 @@ public:
     double nearest_init_distance_;
 
     /* vehicle parameters*/
-    double car_width_, car_length_, car_wheelbase_, car_front_suspension_, 
-           car_rear_suspension_, car_max_steering_angle_, car_d_cr_;
+    double car_width_, car_length_, car_wheelbase_, car_d_cr_;
 
     vector<Eigen::Vector2d> final_path_;
     /* map */

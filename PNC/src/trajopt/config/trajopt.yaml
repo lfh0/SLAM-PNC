@@ -1,11 +1,6 @@
-# 轨迹优化服务参数
-trajopt:
-  max_vel: 3.0
-
 # 订阅话题
 topics:
   global_map: "/global_costmap_node/costmap/costmap"
-  local_map: "/local_costmap_node/costmap/costmap"
   odom: "/lio/robo/odom"
   path: "/astar_path"
   debug_path: "/trajopt/debug_path"
@@ -30,16 +25,13 @@ corridor:
 optimizing:
   traj_resolution: 8
   des_traj_resolution: 20
-  wei_sta_obs: 7000.0
+  wei_sta_obs: 100000.0
   wei_dyn_obs: 7000.0
   wei_feas: 1000.0
-  wei_sqrvar: 1000.0
   wei_time: 500.0
   dyn_obs_clearance: 1.0
   max_vel: 3.0
-  min_vel: -3.0
   max_acc: 1.5
-  min_acc: -1.5
   max_cur: 0.523598
   half_margin: 0.25
 
@@ -61,4 +53,3 @@ vehicle:
   car_length: 0.6
   car_width: 0.6
   car_d_cr: 0.0
-  wheelbase: 0.5

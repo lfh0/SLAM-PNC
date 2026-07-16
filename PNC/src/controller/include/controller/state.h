@@ -25,9 +25,6 @@ struct PathPoint
     double x = 0.0;
     double y = 0.0;
     double yaw = 0.0;
-    double curvature = 0.0;
-    double reference_velocity = 0.0;
-    double arc_length = 0.0;
 };
 
 struct ControlCommand

@@ -12,7 +12,7 @@
 class ControllerServer
 {
 public:
-    ControllerServer(ros::NodeHandle nh, ros::NodeHandle nh_private);
+    explicit ControllerServer(ros::NodeHandle nh);
 
     bool ok() const;
     void spin();

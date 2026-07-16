@@ -2,7 +2,7 @@ controller_server:
   controller_type: pure_pursuit
   rate: 20.0
 
-  path_topic: "/trajopt/minco_traj"
+  path_topic: "/trajopt/debug_path"
   odom_topic: "/lio/robo/odom"
   start_topic: "/start"
   cmd_vel_topic: "/cmd_vel"

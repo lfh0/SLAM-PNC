@@ -43,13 +43,9 @@ rrt:
   max_iterations: 500000
 
 vehicle:
-  cars_num: 1
-  car_id: 0
-  car_length: 2.054
-  car_width: 0.44
+  car_length: 1.0
+  car_width: 0.6
   car_wheelbase: 0.8
-  car_front_suspension: 0.93
-  car_rear_suspension: 1.1
   car_max_steering_angle: 45.0
   car_d_cr: 0.0
 
@@ -60,24 +56,3 @@ planner:
   odom_topic: "/lio/robo/odom"
   # 路径第一个点 yaw 的前视距离，建议和 purepursuit_node/lookahead_distance 保持一致。
   path_yaw_lookahead_distance: 0.3
-
-# 下面这些是 planning_server 节点私有参数，对应代码里的 nhPrivate.param(...)。
-# 当前 launch 在 node 外加载本 yaml，因此需要放在 /planning_server 命名空间下。
-planning_server:
-  freq: 20
-  Vel: 3.0
-  Length: 2.054
-  v_max: 5.0
-  limit_v_and_kesi: true
-  Q_set: [1.0, 1.0, 1.0]
-  R_set: [3.0, 3.0]
-
-  planner:
-    traj_res_: 8
-    dense_traj_res_: 20
-    max_vel: 5.0
-
-  vehicle:
-    car_length: 2.054
-    car_width: 0.44
-    car_d_cr: 0.0

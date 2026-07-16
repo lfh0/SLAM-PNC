@@ -134,10 +134,7 @@ private:
     Eigen::Vector2i global_map_size_;
     Eigen::Vector2d map_origin_;
     vector<double> occupancy_buffer_2d_;
-    std::vector<Eigen::Vector2d> car_vertex_small_, car_vertex_, car_vertex_big_;
     double tie_breaker_ = 1.0 + 1.0 / 10000; 
-    double car_width_, car_length_, car_wheelbase_, car_front_suspension_, 
-    car_rear_suspension_, car_max_steering_angle_, car_d_cr_;
 
 public:
     void init(ros::NodeHandle& nh);

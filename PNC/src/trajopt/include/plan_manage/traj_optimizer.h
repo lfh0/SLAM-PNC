@@ -29,9 +29,6 @@ namespace plan_manage
     std::vector<plan_utils::TrajContainer> swarm_traj_container_;
     std::vector<plan_utils::TrajContainer> swarm_last_traj_container_;
     bool ifdynamic_;
-    int traj_seg_num_;
-
-    int drone_id_;
     int car_id_, cars_num_;
     int traj_resolution_; // number of distinctive constrain points each piece
     int destraj_resolution_; //number of distinctive constrain points of the first and last piece (should be more dense!
@@ -50,14 +47,12 @@ namespace plan_manage
     double wei_obs_;                         // obstacle weight
     double wei_surround_;                       // surround weight
     double wei_feas_;                        // feasibility weight
-    double wei_sqrvar_;                      // squared variance weight
     double wei_time_;                        // time weight
     double surround_clearance_; // safe distance
     double max_vel_, max_acc_, max_cur_;       // dynamic limits
-    double min_vel_, min_acc_;
     double half_margin;                        // safe margin
     // common::VehicleParam veh_param_;    
-    double car_length_, car_width_, car_d_cr_, car_wheelbase_;
+    double car_length_, car_width_, car_d_cr_;
 
 
     double t_now_;
@@ -76,11 +71,6 @@ namespace plan_manage
     std::vector<std::vector<Eigen::MatrixXd>> cfgHs_container;
     std::vector<Eigen::VectorXd> piece_time_ratios_container;
     int trajnum;//轨迹只有一条，所以trajnum = 1
-    /*debug*/
-    Eigen::MatrixXd ctrl_points_;
-    std::vector<Eigen::Vector2d> cos_points;
-    std::vector<Eigen::Vector2d> key_points;
-    std::vector<Eigen::MatrixXd> debug_hPolys;
     std::vector<plan_utils::MinJerkOpt> jerkOpt_container;
     std::vector<int> piece_num_container;
 
@@ -91,12 +81,6 @@ namespace plan_manage
 
     /* set variables */
     void init(ros::NodeHandle &nh);
-    ros::Publisher debug_pub,debug_pub1,debug_galaxy_poly_pub_,debug_key_points_pub;
-    void displayPoints();
-    void displayCosPoints();
-    void displayBugPoly();
-    void displayKeyPoints();
-    void setControlPoints(const Eigen::MatrixXd &points);
     void setSurroundTrajs(plan_utils::SurroundTrajData *surround_trajs_ptr);
     void setSwarmTrajs(std::vector<plan_utils::TrajContainer> &swarm_traj_container, bool ifdynamic);
     void setAllCarsTrajs(plan_utils::TrajContainer& trajectory, int& car_id);
@@ -147,11 +131,6 @@ namespace plan_manage
     //std::vector<Eigen::VectorXd> 
     void addPVAGradCost2CT(std::vector<Eigen::VectorXd>  &gdTs, Eigen::VectorXd &costs, const int trajid, const double trajtime);
 
-    bool obstacleGradCostP(const int i_dp,
-                           const Eigen::Vector2d &p,
-                           Eigen::Vector2d &gradp,
-                           double &costp);
-
     bool surroundGradCostP(const int i_dp,
                         const double t,
                         const Eigen::Vector2d &p,
@@ -183,10 +162,6 @@ namespace plan_manage
                                         const int trajid, const int sur_id, double res_t,Eigen::Matrix<double, 6, 2> c
                                         ,int i ,int j,double omg,double step,double wei_surround_,int K);
     bool dynamicObsCosCheck(double t_now, const Eigen::MatrixXd iniStates,  int trajid, int sur_id);
-
-    void distanceSqrVarianceWithGradCost2p(const Eigen::MatrixXd &ps,
-                                           Eigen::MatrixXd &gdp,
-                                           double &var);
 
     inline bool extractVs(const std::vector<Eigen::MatrixXd> &hPs,
                           std::vector<Eigen::MatrixXd> &vPs) const
@@ -233,11 +208,6 @@ namespace plan_manage
         return true;
     }
 
-    std::vector<Eigen::MatrixXd> debug_P;
-    std::vector<Eigen::VectorXd> debug_T;
-    std::vector<double> debug_cost;
-
-    void updatePT(const Eigen::MatrixXd &inPs,const Eigen::VectorXd &ts, double cost);
     void getBoundPts(Eigen::Vector2d &position, double angle, std::vector<Eigen::Vector2d> &BoundVertices);
     void positiveSmoothedL1(const double &x, double &f, double &df);
     void positiveSmoothedL3(const double &x, double &f, double &df);

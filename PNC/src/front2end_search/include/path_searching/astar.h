@@ -118,9 +118,6 @@ private:
     Eigen::Vector2i search_min_idx_, search_max_idx_;
     double tie_breaker_ = 1.0 + 1.0 / 10000; 
 
-    double car_width_, car_length_, car_wheelbase_, car_front_suspension_, 
-    car_rear_suspension_, car_max_steering_angle_, car_d_cr_;
-
     bool isInMap2d(const Eigen::Vector2d &pos);
     bool isInMap2d(const Eigen::Vector2i &id);
     bool isInSearchWindow(const Eigen::Vector2i &id);
@@ -144,8 +141,6 @@ public:
     Astar();
     ~Astar();
     ros::NodeHandle nh_;
-    std::vector<Eigen::Vector2d> car_vertex_small_, car_vertex_, car_vertex_big_;
-
     enum { REACH_HORIZON = 1, REACH_END = 2,  NO_PATH = 3, REACH_END_BUT_SHOT_FAILS = 4};
     
 	    void init(ros::NodeHandle& nh);

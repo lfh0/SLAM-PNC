@@ -133,7 +133,7 @@ private:
     void updatePathOrientations(nav_msgs::Path& path_msg);
 
 public:
-    PlanningServer(ros::NodeHandle nh, ros::NodeHandle nhPrivate);
+    explicit PlanningServer(ros::NodeHandle nh);
     bool PlanbySearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     bool PlanbyAstarSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     bool PlanbyJPSSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
@@ -146,7 +146,7 @@ public:
     ~PlanningServer();
 };
 
-PlanningServer::PlanningServer(ros::NodeHandle nh, ros::NodeHandle nhPrivate):
+PlanningServer::PlanningServer(ros::NodeHandle nh):
 nh_(nh)
 {
     goal_orientation_.w = 1.0;
@@ -156,23 +156,11 @@ nh_(nh)
               default_astar_retry_margins);
     nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
     nh_.param<std::string>("planner/odom_topic", odom_topic_, "/lio/robo/odom");
-    nh_.param("purepursuit_node/lookahead_distance", path_yaw_lookahead_distance_, 0.3);
+    nh_.param("planner/path_yaw_lookahead_distance", path_yaw_lookahead_distance_, 0.3);
     nh_.param("planner/search_type", search_type_, 0);
-    int occupied_threshold;
-    bool unknown_as_occupied;
-    double search_max_time;
-    int rrt_max_iterations;
-    double rrt_max_time;
-    nh_.param("search/occupied_threshold", occupied_threshold, 50);
-    nh_.param("search/unknown_as_occupied", unknown_as_occupied, true);
-    nh_.param("search/max_search_time", search_max_time, 5000.1);
-    nh_.param("rrt/max_search_time", rrt_max_time, 50000.0);
-    nh_.param("rrt/max_iterations", rrt_max_iterations, 50000);
-    ROS_INFO("PlanningServer params: map_topic=%s, odom_topic=%s, search_type=%d, path_yaw_lookahead=%.3f, occupied_threshold=%d, "
-             "unknown_as_occupied=%d, search_max_time=%.1f, rrt_max_time=%.1f, rrt_max_iterations=%d",
-             map_topic_.c_str(), odom_topic_.c_str(), search_type_, path_yaw_lookahead_distance_, occupied_threshold,
-             static_cast<int>(unknown_as_occupied), search_max_time,
-             rrt_max_time, rrt_max_iterations);
+    ROS_INFO("PlanningServer params: map_topic=%s, odom_topic=%s, search_type=%d, path_yaw_lookahead=%.3f",
+             map_topic_.c_str(), odom_topic_.c_str(), search_type_,
+             path_yaw_lookahead_distance_);
 
 
     globalMapSub_ = nh_.subscribe<nav_msgs::OccupancyGrid>(map_topic_, 10, &PlanningServer::globalMapCallBack, this);
@@ -561,9 +549,7 @@ int main(int argc, char** argv){
     std::cout << " Initialize the road network, please wait  ..." << std::endl;
     ros::init(argc, argv, "planning_server");
     ros::NodeHandle nh;
-    ros::NodeHandle nhPrivate("~");
-
-    PlanningServer planServer(nh, nhPrivate);
+    PlanningServer planServer(nh);
     ros::AsyncSpinner spinner(0);
     spinner.start();
     ros::Duration(1.0).sleep();

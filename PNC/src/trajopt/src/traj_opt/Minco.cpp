@@ -1299,13 +1299,10 @@ namespace plan_manage
       nh_.param("optimizing/wei_sta_obs", wei_obs_, 7000.0);
       nh_.param("optimizing/wei_dyn_obs", wei_surround_, 7000.0);
       nh_.param("optimizing/wei_feas", wei_feas_, 1000.0);
-      nh_.param("optimizing/wei_sqrvar", wei_sqrvar_, 1000.0);
       nh_.param("optimizing/wei_time", wei_time_, 500.0);
       nh_.param("optimizing/dyn_obs_clearance", surround_clearance_, 1.0);
       nh_.param("optimizing/max_vel", max_vel_, 3.0);
-      nh_.param("optimizing/min_vel", min_vel_, -3.0);
       nh_.param("optimizing/max_acc", max_acc_, 1.5);
-      nh_.param("optimizing/min_acc", min_acc_, -1.5);
       nh_.param("optimizing/max_cur", max_cur_, 0.523598);
       nh_.param("optimizing/half_margin", half_margin, 0.25);
 
@@ -1314,7 +1311,6 @@ namespace plan_manage
       nh_.param("vehicle/car_length", car_length_, 0.6);
       nh_.param("vehicle/car_width", car_width_, 0.6);
       nh_.param("vehicle/car_d_cr", car_d_cr_, 0.0);
-      nh_.param("vehicle/wheelbase", car_wheelbase_, 0.5);
 
       B_h << 0, -1,
              1, 0;

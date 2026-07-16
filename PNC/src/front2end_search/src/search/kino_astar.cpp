@@ -66,9 +66,6 @@ namespace path_searching
       nh_.param("vehicle/car_width", car_width_, 0.6);
       nh_.param("vehicle/car_length", car_length_, 1.0);
       nh_.param("vehicle/car_wheelbase", car_wheelbase_, 0.8);
-      nh_.param("vehicle/car_front_suspension", car_front_suspension_, 0.93);
-      nh_.param("vehicle/car_rear_suspension", car_rear_suspension_, 1.1);
-      nh_.param("vehicle/car_max_steering_angle", car_max_steering_angle_, 45.0);
       nh_.param("vehicle/car_d_cr", car_d_cr_, 0.0);
 
       nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");

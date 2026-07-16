@@ -53,14 +53,6 @@ namespace path_searching
 		nh_.param("search/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
 		nh_.param("search/unknown_as_occupied", unknown_as_occupied_, true);
 
-		nh_.param("vehicle/car_width", car_width_, 0.2);
-		nh_.param("vehicle/car_length", car_length_, 0.2);
-		nh_.param("vehicle/car_wheelbase", car_wheelbase_, 0.8);
-		nh_.param("vehicle/car_front_suspension", car_front_suspension_, 0.93);
-		nh_.param("vehicle/car_rear_suspension", car_rear_suspension_, 1.1);
-		nh_.param("vehicle/car_max_steering_angle", car_max_steering_angle_, 45.0);
-		nh_.param("vehicle/car_d_cr", car_d_cr_, 0.0);
-
 			nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
 			ROS_INFO("Astar map_topic=%s, occupied_threshold=%d, obstacle_cost_weight=%.3f, unknown_as_occupied=%d",
 			         map_topic_.c_str(), occupied_threshold_, obstacle_cost_weight_,
@@ -78,52 +70,6 @@ namespace path_searching
 
 		inv_resolution_ = 1.0 / resolution_;
 
-		car_vertex_small_.clear();
-		Eigen::Vector2d vertex_small;
-		vertex_small << car_length_ / 2.0 + car_d_cr_, car_width_ / 2.0;
-		car_vertex_small_.push_back(vertex_small);
-		vertex_small << car_length_ / 2.0 + car_d_cr_, -car_width_ / 2.0;
-		car_vertex_small_.push_back(vertex_small);
-		vertex_small << -car_length_ / 2.0 + car_d_cr_, -car_width_ / 2.0;
-		car_vertex_small_.push_back(vertex_small);
-		vertex_small << -car_length_ / 2.0 + car_d_cr_, car_width_ / 2.0;
-		car_vertex_small_.push_back(vertex_small);
-		vertex_small << car_length_ / 2.0 + car_d_cr_, car_width_ / 2.0;
-		car_vertex_small_.push_back(vertex_small);
-
-		// stores the vertexs of the car
-		// lfhTODO:改成圆形轮廓
-		car_vertex_.clear();
-		Eigen::Vector2d vertex;
-		vertex << car_length_ / 2.0 + car_d_cr_, car_width_ / 2.0;
-		car_vertex_.push_back(vertex);
-		vertex << car_length_ / 2.0 + car_d_cr_, -car_width_ / 2.0;
-		car_vertex_.push_back(vertex);
-		vertex << -car_length_ / 2.0 + car_d_cr_, -car_width_ / 2.0;
-		car_vertex_.push_back(vertex);
-		vertex << -car_length_ / 2.0 + car_d_cr_, car_width_ / 2.0;
-		car_vertex_.push_back(vertex);
-		vertex << car_length_ / 2.0 + car_d_cr_, car_width_ / 2.0;
-		car_vertex_.push_back(vertex);
-
-		car_length_ += 0.4;
-		car_width_ += 0.8;
-
-		car_vertex_big_.clear();
-		Eigen::Vector2d vertex_big;
-		vertex_big << car_length_ / 2.0 + car_d_cr_, car_width_ / 2.0;
-		car_vertex_big_.push_back(vertex_big);
-		vertex_big << car_length_ / 2.0 + car_d_cr_, -car_width_ / 2.0;
-		car_vertex_big_.push_back(vertex_big);
-		vertex_big << -car_length_ / 2.0 + car_d_cr_, -car_width_ / 2.0;
-		car_vertex_big_.push_back(vertex_big);
-		vertex_big << -car_length_ / 2.0 + car_d_cr_, car_width_ / 2.0;
-		car_vertex_big_.push_back(vertex_big);
-		vertex_big << car_length_ / 2.0 + car_d_cr_, car_width_ / 2.0;
-		car_vertex_big_.push_back(vertex_big);   
-
-		car_length_ -= 0.4;
-		car_width_ -= 0.8;   
 		// expandNodesVis = nh.advertise<sensor_msgs::PointCloud2>("/vis/expanded_nodes", 1);
 	}
 

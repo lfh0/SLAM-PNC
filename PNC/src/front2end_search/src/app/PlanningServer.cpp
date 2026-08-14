@@ -7,13 +7,14 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <Eigen/Core>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
-#include "path_searching/kino_astar.h"
+#include "path_searching/obs_hybridastar.h"
 #include "path_searching/astar.h"
 #include "path_searching/jps.h"
 #include "path_searching/rrt.h"
@@ -88,10 +89,11 @@ private:
     ros::Subscriber goalSub_;
     ros::Subscriber odomSub_;
 
-    ros::Publisher kinoPathPub_;
+    ros::Publisher obsHybridAstarPathPub_;
     ros::Publisher AstarPathPub_;
     ros::Publisher JPSPathPub_;
     ros::Publisher RRTPathPub_;
+    ros::Publisher pathEndpointsPub_;
 
     ros::Publisher mkr_pub;
 
@@ -105,9 +107,9 @@ private:
 
     geometry_msgs::Quaternion goal_orientation_;
 
-    std::vector<Eigen::Vector2d> kino_path_;
+    std::vector<Eigen::Vector2d> search_path_;
     
-    std::unique_ptr<path_searching::KinoAstar> kino_path_finder_;
+    std::unique_ptr<path_searching::ObsHybridAstar> obs_hybridastar_path_finder_;
     std::unique_ptr<path_searching::Astar> astar_path_finder_;
     std::unique_ptr<path_searching::JPS> jps_path_finder_;
     std::unique_ptr<path_searching::RRT> rrt_path_finder_;
@@ -117,9 +119,12 @@ private:
     std::vector<double> astar_search_window_retry_margins_;
     std::string map_topic_;
     std::string odom_topic_;
+    std::string goal_topic_;
     double path_yaw_lookahead_distance_ = 0.3;
     size_t start_yaw_sample_offset_ = 4;
     int search_type_;
+    ros::WallTime active_goal_wall_start_;
+    uint64_t planning_seq_ = 0;
 
 private:
     void map_init();
@@ -131,14 +136,17 @@ private:
     void publishPointWithText(const Eigen::Vector2d& p, const std::string& text, const Color c);
     void runSelectedSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     void updatePathOrientations(nav_msgs::Path& path_msg);
+    void displayPathEndpoints(const nav_msgs::Path& path_msg, const std::string& ns);
+    static double elapsedMs(const ros::WallTime& start_time);
+    double elapsedFromActiveGoalMs() const;
 
 public:
     explicit PlanningServer(ros::NodeHandle nh);
-    bool PlanbySearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
+    bool PlanbyObsHybridAstarSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     bool PlanbyAstarSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     bool PlanbyJPSSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
     bool PlanbyRRTSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
-    void displayKinoPath(const std::vector<Eigen::Vector2d>& final_path);
+    void displayObsHybridAstarPath(const std::vector<Eigen::Vector2d>& final_path);
     void displayAstarPath(const std::vector<Eigen::Vector2d>& final_path);
     void displayJPSPath(const std::vector<Eigen::Vector2d>& final_path);
     void displayRRTPath(const std::vector<Eigen::Vector2d>& final_path);
@@ -149,13 +157,16 @@ public:
 PlanningServer::PlanningServer(ros::NodeHandle nh):
 nh_(nh)
 {
+    // launch 中配置在 <node> 下的话题参数属于节点私有命名空间。
+    ros::NodeHandle private_nh("~");
     goal_orientation_.w = 1.0;
     std::vector<double> default_astar_retry_margins = {20.0, 50.0, 100.0};
-    nh_.param("search/search_window_retry_margins",
+    nh_.param("astar/search_window_retry_margins",
               astar_search_window_retry_margins_,
               default_astar_retry_margins);
-    nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
-    nh_.param<std::string>("planner/odom_topic", odom_topic_, "/lio/robo/odom");
+    private_nh.param<std::string>("search/map_topic", map_topic_, "/projected_map");
+    private_nh.param<std::string>("planner/odom_topic", odom_topic_, "/lio/robo/odom");
+    private_nh.param<std::string>("planner/goal_topic", goal_topic_, "/move_base_simple/goal");
     nh_.param("planner/path_yaw_lookahead_distance", path_yaw_lookahead_distance_, 0.3);
     nh_.param("planner/search_type", search_type_, 0);
     ROS_INFO("PlanningServer params: map_topic=%s, odom_topic=%s, search_type=%d, path_yaw_lookahead=%.3f",
@@ -164,22 +175,24 @@ nh_(nh)
 
 
     globalMapSub_ = nh_.subscribe<nav_msgs::OccupancyGrid>(map_topic_, 10, &PlanningServer::globalMapCallBack, this);
-    goalSub_ = nh_.subscribe("/move_base_simple/goal", 1, &PlanningServer::goalCallBack, this);
+    goalSub_ = nh_.subscribe(goal_topic_, 1, &PlanningServer::goalCallBack, this);
     odomSub_ = nh_.subscribe<nav_msgs::Odometry>(odom_topic_, 10, &PlanningServer::odomCallBack, this);
 
-    kinoPathPub_ = nh_.advertise<nav_msgs::Path>("kino_path", 10);
-    AstarPathPub_ = nh_.advertise<nav_msgs::Path>("astar_path", 10);
-    JPSPathPub_ = nh_.advertise<nav_msgs::Path>("jps_path", 10);
-    RRTPathPub_ = nh_.advertise<nav_msgs::Path>("rrt_path", 10);
+    obsHybridAstarPathPub_ = nh_.advertise<nav_msgs::Path>("/obs_hybridastar_path", 10);
+    AstarPathPub_ = nh_.advertise<nav_msgs::Path>("/astar_path", 10);
+    JPSPathPub_ = nh_.advertise<nav_msgs::Path>("/jps_path", 10);
+    RRTPathPub_ = nh_.advertise<nav_msgs::Path>("/rrt_path", 10);
+    pathEndpointsPub_ = nh_.advertise<visualization_msgs::MarkerArray>(
+        "/front_path_endpoints", 1, true);
 
-    mkr_pub = nh_.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 1);
+    mkr_pub = nh_.advertise<visualization_msgs::MarkerArray>("/visualization_marker_array", 1);
 
     // TODO
     astar_path_finder_.reset(new path_searching::Astar);
     astar_path_finder_->init(nh_);
     
-    kino_path_finder_.reset(new path_searching::KinoAstar);
-    kino_path_finder_->init(nh_);
+    obs_hybridastar_path_finder_.reset(new path_searching::ObsHybridAstar);
+    obs_hybridastar_path_finder_->init(nh_);
 
     jps_path_finder_.reset(new path_searching::JPS);
     jps_path_finder_->init(nh_);
@@ -202,7 +215,26 @@ void PlanningServer::odomCallBack(const nav_msgs::OdometryConstPtr &msg){
     has_odom_ = true;
 }
 
+double PlanningServer::elapsedMs(const ros::WallTime& start_time)
+{
+    return (ros::WallTime::now() - start_time).toSec() * 1000.0;
+}
+
+double PlanningServer::elapsedFromActiveGoalMs() const
+{
+    if (active_goal_wall_start_.isZero()) {
+        return 0.0;
+    }
+    return (ros::WallTime::now() - active_goal_wall_start_).toSec() * 1000.0;
+}
+
 void PlanningServer::goalCallBack(const geometry_msgs::PoseStamped::ConstPtr &msg){
+    active_goal_wall_start_ = ros::WallTime::now();
+    const uint64_t seq = ++planning_seq_;
+    ROS_INFO("[planner_timing][front][seq=%lu] goal_received stamp=%.6f",
+             static_cast<unsigned long>(seq), msg->header.stamp.toSec());
+
+    const ros::WallTime odom_wait_start = ros::WallTime::now();
     nav_msgs::Odometry odom;
     {
         std::lock_guard<std::mutex> lock(odom_mutex_);
@@ -212,6 +244,8 @@ void PlanningServer::goalCallBack(const geometry_msgs::PoseStamped::ConstPtr &ms
         }
         odom = carOdom_;
     }
+    ROS_INFO("[planner_timing][front][seq=%lu] odom_snapshot_ms=%.3f",
+             static_cast<unsigned long>(seq), elapsedMs(odom_wait_start));
 
     const double start_yaw = tf::getYaw(odom.pose.pose.orientation);
     const double goal_yaw = tf::getYaw(msg->pose.orientation);
@@ -223,8 +257,15 @@ void PlanningServer::goalCallBack(const geometry_msgs::PoseStamped::ConstPtr &ms
     ROS_INFO_STREAM("Planning from odom start: " << plan_start.transpose());
     ROS_INFO_STREAM("Planning to goal: " << plan_goal.transpose());
 
+    const ros::WallTime sync_start = ros::WallTime::now();
     syncSearchMaps();
+    ROS_INFO("[planner_timing][front][seq=%lu] sync_maps_ms=%.3f",
+             static_cast<unsigned long>(seq), elapsedMs(sync_start));
+
+    const ros::WallTime search_start = ros::WallTime::now();
     runSelectedSearch(plan_start, plan_goal);
+    ROS_INFO("[planner_timing][front][seq=%lu] run_selected_total_ms=%.3f goal_to_return_ms=%.3f",
+             static_cast<unsigned long>(seq), elapsedMs(search_start), elapsedFromActiveGoalMs());
 }
 
 void PlanningServer::runSelectedSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
@@ -234,13 +275,13 @@ void PlanningServer::runSelectedSearch(Eigen::Vector3d start_pt, Eigen::Vector3d
             PlanbyAstarSearch(start_pt, end_pt);
             PlanbyJPSSearch(start_pt, end_pt);
             PlanbyRRTSearch(start_pt, end_pt);
-            PlanbySearch(start_pt, end_pt);
+            PlanbyObsHybridAstarSearch(start_pt, end_pt);
             break;
         case 1:
             PlanbyAstarSearch(start_pt, end_pt);
             break;
         case 2:
-            PlanbySearch(start_pt, end_pt);
+            PlanbyObsHybridAstarSearch(start_pt, end_pt);
             break;
         case 3:
             PlanbyJPSSearch(start_pt, end_pt);
@@ -251,7 +292,7 @@ void PlanningServer::runSelectedSearch(Eigen::Vector3d start_pt, Eigen::Vector3d
         default:
             ROS_WARN("Invalid planner/search_type=%d, run all searchers instead", search_type_);
             PlanbyAstarSearch(start_pt, end_pt);
-            PlanbySearch(start_pt, end_pt);
+            PlanbyObsHybridAstarSearch(start_pt, end_pt);
             PlanbyJPSSearch(start_pt, end_pt);
             PlanbyRRTSearch(start_pt, end_pt);
             break;
@@ -303,8 +344,9 @@ void PlanningServer::map_init()
 {
     ros::spinOnce();
     ros::Rate loop_rate(10);
-    while(globalMap_.data.size() < 1)
+    while(globalMap_.data.empty())
     {
+        ROS_INFO_THROTTLE(2.0, "Waiting for inflated costmap from %s", map_topic_.c_str());
         ros::spinOnce();
         loop_rate.sleep();
     }
@@ -312,7 +354,6 @@ void PlanningServer::map_init()
         ROS_WARN("Map data incomplete, waiting...");
         ros::Duration(0.1).sleep();
     }
-
     resolution_ = globalMap_.info.resolution;
     if (resolution_ > 1.0e-6) {
         start_yaw_sample_offset_ = std::max<size_t>(
@@ -325,7 +366,8 @@ void PlanningServer::map_init()
 
     // TODO
     astar_path_finder_->setMap(globalMap_);
-    kino_path_finder_->setMap(globalMap_);
+    // ObsHybridAstar 仍使用膨胀后的分层代价地图。
+    obs_hybridastar_path_finder_->setMap(globalMap_);
     jps_path_finder_->setMap(globalMap_);
     rrt_path_finder_->setMap(globalMap_);
     search_maps_dirty_ = false;
@@ -337,7 +379,7 @@ void PlanningServer::syncSearchMaps()
         return;
     }
     astar_path_finder_->setMap(globalMap_);
-    kino_path_finder_->setMap(globalMap_);
+    obs_hybridastar_path_finder_->setMap(globalMap_);
     jps_path_finder_->setMap(globalMap_);
     rrt_path_finder_->setMap(globalMap_);
     resolution_ = globalMap_.info.resolution;
@@ -348,50 +390,72 @@ void PlanningServer::syncSearchMaps()
     search_maps_dirty_ = false;
 }
 
-bool PlanningServer::PlanbySearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
+bool PlanningServer::PlanbyObsHybridAstarSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
 {
+    const ros::WallTime planner_start = ros::WallTime::now();
     Eigen::Vector4d start_state, end_state;
     Eigen::Vector2d init_ctrl(0, 0);
     start_time_ = ros::Time::now().toSec();
     start_state << start_pt, 0.01;
     end_state << end_pt, 0.01;
 
-    int status = kino_path_finder_->search(start_state, init_ctrl, end_state);
-    if(!status)
+    int status = obs_hybridastar_path_finder_->search(start_state, init_ctrl, end_state);
+    const double search_ms = elapsedMs(planner_start);
+    if(!status) {
+        ROS_WARN("[planner_timing][front][seq=%lu][obs_hybridastar] search_failed status=%d search_ms=%.3f goal_to_now_ms=%.3f",
+                 static_cast<unsigned long>(planning_seq_), status, search_ms, elapsedFromActiveGoalMs());
         return false;
-    kino_path_ = kino_path_finder_->getKinoPath();
-    kino_path_finder_->reset();
+    }
+    const ros::WallTime output_start = ros::WallTime::now();
+    search_path_ = obs_hybridastar_path_finder_->getPath();
+    obs_hybridastar_path_finder_->reset();
+    ROS_INFO("[planner_timing][front][seq=%lu][obs_hybridastar] search_ms=%.3f output_reset_ms=%.3f path_points=%zu",
+             static_cast<unsigned long>(planning_seq_), search_ms,
+             elapsedMs(output_start), search_path_.size());
 
-    displayKinoPath(kino_path_);
+    displayObsHybridAstarPath(search_path_);
 
     return true;
 }
 
 bool PlanningServer::PlanbyAstarSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
 {
+    const ros::WallTime planner_start = ros::WallTime::now();
     Eigen::Vector2d start_state(start_pt[0], start_pt[1]);
     Eigen::Vector2d end_state(end_pt[0], end_pt[1]);
 
     int status = path_searching::Astar::NO_PATH;
     for (const double margin : astar_search_window_retry_margins_) {
+        const ros::WallTime attempt_start = ros::WallTime::now();
         astar_path_finder_->setSearchWindowMargin(margin);
         ROS_INFO("Try Astar search with window margin %.2fm", margin);
-        status = astar_path_finder_->search(start_state, end_state);
+        status = astar_path_finder_->search(start_state, end_state, start_pt[2]);
+        const double attempt_ms = elapsedMs(attempt_start);
+        ROS_INFO("[planner_timing][front][seq=%lu][astar] attempt_margin=%.2f status=%d attempt_ms=%.3f",
+                 static_cast<unsigned long>(planning_seq_), margin, status, attempt_ms);
         if(status == path_searching::Astar::REACH_END) {
-            kino_path_ = astar_path_finder_->getKinoPath();
+            const ros::WallTime output_start = ros::WallTime::now();
+            search_path_ = astar_path_finder_->getPath();
             astar_path_finder_->reset();
-            displayAstarPath(kino_path_);
+            ROS_INFO("[planner_timing][front][seq=%lu][astar] search_total_ms=%.3f output_reset_ms=%.3f path_points=%zu",
+                     static_cast<unsigned long>(planning_seq_), elapsedMs(planner_start),
+                     elapsedMs(output_start), search_path_.size());
+            displayAstarPath(search_path_);
             return true;
         }
         astar_path_finder_->reset();
     }
 
     ROS_WARN("Astar failed after %zu search-window attempts", astar_search_window_retry_margins_.size());
+    ROS_WARN("[planner_timing][front][seq=%lu][astar] failed search_total_ms=%.3f goal_to_now_ms=%.3f",
+             static_cast<unsigned long>(planning_seq_), elapsedMs(planner_start),
+             elapsedFromActiveGoalMs());
     return false;
 }
 
 bool PlanningServer::PlanbyJPSSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
 {
+    const ros::WallTime planner_start = ros::WallTime::now();
     Eigen::Vector2d start_state(start_pt[0], start_pt[1]);
     Eigen::Vector2d end_state(end_pt[0], end_pt[1]);
 
@@ -402,18 +466,27 @@ bool PlanningServer::PlanbyJPSSearch(Eigen::Vector3d start_pt, Eigen::Vector3d e
     if(status != path_searching::JPS::REACH_END) {
         ROS_WARN("JPS failed with status %d", status);
         jps_path_finder_->reset();
+        ROS_WARN("[planner_timing][front][seq=%lu][jps] failed status=%d search_ms=%.3f goal_to_now_ms=%.3f",
+                 static_cast<unsigned long>(planning_seq_), status,
+                 elapsedMs(planner_start), elapsedFromActiveGoalMs());
         return false;
     }
-    kino_path_ = jps_path_finder_->getKinoPath();
+    const double search_ms = elapsedMs(planner_start);
+    const ros::WallTime output_start = ros::WallTime::now();
+    search_path_ = jps_path_finder_->getPath();
     jps_path_finder_->reset();
+    ROS_INFO("[planner_timing][front][seq=%lu][jps] search_ms=%.3f output_reset_ms=%.3f path_points=%zu",
+             static_cast<unsigned long>(planning_seq_), search_ms,
+             elapsedMs(output_start), search_path_.size());
 
-    displayJPSPath(kino_path_);
+    displayJPSPath(search_path_);
 
     return true;
 }
 
 bool PlanningServer::PlanbyRRTSearch(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
 {
+    const ros::WallTime planner_start = ros::WallTime::now();
     Eigen::Vector2d start_state(start_pt[0], start_pt[1]);
     Eigen::Vector2d end_state(end_pt[0], end_pt[1]);
 
@@ -423,19 +496,28 @@ bool PlanningServer::PlanbyRRTSearch(Eigen::Vector3d start_pt, Eigen::Vector3d e
     if(status != path_searching::RRT::REACH_END) {
         ROS_WARN("RRT failed with status %d", status);
         rrt_path_finder_->reset();
+        ROS_WARN("[planner_timing][front][seq=%lu][rrt] failed status=%d search_ms=%.3f goal_to_now_ms=%.3f",
+                 static_cast<unsigned long>(planning_seq_), status,
+                 elapsedMs(planner_start), elapsedFromActiveGoalMs());
         return false;
     }
-    kino_path_ = rrt_path_finder_->getKinoPath();
+    const double search_ms = elapsedMs(planner_start);
+    const ros::WallTime output_start = ros::WallTime::now();
+    search_path_ = rrt_path_finder_->getPath();
     rrt_path_finder_->reset();
+    ROS_INFO("[planner_timing][front][seq=%lu][rrt] search_ms=%.3f output_reset_ms=%.3f path_points=%zu",
+             static_cast<unsigned long>(planning_seq_), search_ms,
+             elapsedMs(output_start), search_path_.size());
 
-    displayRRTPath(kino_path_);
+    displayRRTPath(search_path_);
 
     return true;
 }
 
 
-void PlanningServer::displayKinoPath(const std::vector<Eigen::Vector2d>& final_path)
+void PlanningServer::displayObsHybridAstarPath(const std::vector<Eigen::Vector2d>& final_path)
 {
+    const ros::WallTime build_start = ros::WallTime::now();
     nav_msgs::Path path_msg;
     geometry_msgs::PoseStamped tmpPose;
     tmpPose.header.frame_id = "map";
@@ -447,11 +529,18 @@ void PlanningServer::displayKinoPath(const std::vector<Eigen::Vector2d>& final_p
     path_msg.header.frame_id = "map";
     path_msg.header.stamp = ros::Time::now();
     updatePathOrientations(path_msg);
+    const double build_ms = elapsedMs(build_start);
 
-    kinoPathPub_.publish(path_msg);
+    displayPathEndpoints(path_msg, "obs_hybridastar_path_endpoints");
+    const ros::WallTime publish_start = ros::WallTime::now();
+    obsHybridAstarPathPub_.publish(path_msg);
+    ROS_INFO("[planner_timing][front][seq=%lu][obs_hybridastar] path_build_ms=%.3f publish_call_ms=%.3f goal_to_path_publish_ms=%.3f path_points=%zu",
+             static_cast<unsigned long>(planning_seq_), build_ms,
+             elapsedMs(publish_start), elapsedFromActiveGoalMs(), path_msg.poses.size());
 }
 void PlanningServer::displayAstarPath(const std::vector<Eigen::Vector2d>& final_path)
 {
+    const ros::WallTime build_start = ros::WallTime::now();
     nav_msgs::Path path_msg;
     geometry_msgs::PoseStamped tmpPose;
     tmpPose.header.frame_id = "map";
@@ -463,10 +552,17 @@ void PlanningServer::displayAstarPath(const std::vector<Eigen::Vector2d>& final_
     path_msg.header.frame_id = "map";
     path_msg.header.stamp = ros::Time::now();
     updatePathOrientations(path_msg);
+    const double build_ms = elapsedMs(build_start);
+    displayPathEndpoints(path_msg, "astar_path_endpoints");
+    const ros::WallTime publish_start = ros::WallTime::now();
     AstarPathPub_.publish(path_msg);
+    ROS_INFO("[planner_timing][front][seq=%lu][astar] path_build_ms=%.3f publish_call_ms=%.3f goal_to_path_publish_ms=%.3f path_points=%zu",
+             static_cast<unsigned long>(planning_seq_), build_ms,
+             elapsedMs(publish_start), elapsedFromActiveGoalMs(), path_msg.poses.size());
 }
 void PlanningServer::displayJPSPath(const std::vector<Eigen::Vector2d>& final_path)
 {
+    const ros::WallTime build_start = ros::WallTime::now();
     nav_msgs::Path path_msg;
     geometry_msgs::PoseStamped tmpPose;
     tmpPose.header.frame_id = "map";
@@ -478,10 +574,17 @@ void PlanningServer::displayJPSPath(const std::vector<Eigen::Vector2d>& final_pa
     path_msg.header.frame_id = "map";
     path_msg.header.stamp = ros::Time::now();
     updatePathOrientations(path_msg);
+    const double build_ms = elapsedMs(build_start);
+    displayPathEndpoints(path_msg, "jps_path_endpoints");
+    const ros::WallTime publish_start = ros::WallTime::now();
     JPSPathPub_.publish(path_msg);
+    ROS_INFO("[planner_timing][front][seq=%lu][jps] path_build_ms=%.3f publish_call_ms=%.3f goal_to_path_publish_ms=%.3f path_points=%zu",
+             static_cast<unsigned long>(planning_seq_), build_ms,
+             elapsedMs(publish_start), elapsedFromActiveGoalMs(), path_msg.poses.size());
 }
 void PlanningServer::displayRRTPath(const std::vector<Eigen::Vector2d>& final_path)
 {
+    const ros::WallTime build_start = ros::WallTime::now();
     nav_msgs::Path path_msg;
     geometry_msgs::PoseStamped tmpPose;
     tmpPose.header.frame_id = "map";
@@ -493,7 +596,13 @@ void PlanningServer::displayRRTPath(const std::vector<Eigen::Vector2d>& final_pa
     path_msg.header.frame_id = "map";
     path_msg.header.stamp = ros::Time::now();
     updatePathOrientations(path_msg);
+    const double build_ms = elapsedMs(build_start);
+    displayPathEndpoints(path_msg, "rrt_path_endpoints");
+    const ros::WallTime publish_start = ros::WallTime::now();
     RRTPathPub_.publish(path_msg);
+    ROS_INFO("[planner_timing][front][seq=%lu][rrt] path_build_ms=%.3f publish_call_ms=%.3f goal_to_path_publish_ms=%.3f path_points=%zu",
+             static_cast<unsigned long>(planning_seq_), build_ms,
+             elapsedMs(publish_start), elapsedFromActiveGoalMs(), path_msg.poses.size());
 }
 
 void PlanningServer::updatePathOrientations(nav_msgs::Path& path_msg)
@@ -543,6 +652,46 @@ void PlanningServer::updatePathOrientations(nav_msgs::Path& path_msg)
     }
 
     path_msg.poses.back().pose.orientation = goal_orientation_;
+}
+
+void PlanningServer::displayPathEndpoints(const nav_msgs::Path& path_msg, const std::string& ns)
+{
+    if (path_msg.poses.empty()) {
+        return;
+    }
+
+    visualization_msgs::MarkerArray markers;
+    visualization_msgs::Marker clear_marker;
+    clear_marker.action = visualization_msgs::Marker::DELETEALL;
+    markers.markers.push_back(clear_marker);
+
+    const std::array<const geometry_msgs::PoseStamped*, 2> endpoint_poses{
+        &path_msg.poses.front(), &path_msg.poses.back()};
+    for (size_t i = 0; i < endpoint_poses.size(); ++i) {
+        visualization_msgs::Marker arrow;
+        arrow.header = path_msg.header;
+        arrow.ns = "front_" + ns;
+        arrow.id = static_cast<int>(i);
+        arrow.type = visualization_msgs::Marker::ARROW;
+        arrow.action = visualization_msgs::Marker::ADD;
+        arrow.pose = endpoint_poses[i]->pose;
+        arrow.pose.position.z += 0.35;
+        arrow.scale.x = 0.45;
+        arrow.scale.y = 0.09;
+        arrow.scale.z = 0.09;
+        arrow.color.a = 1.0;
+        if (i == 0) {
+            arrow.color.r = 0.0;
+            arrow.color.g = 1.0;
+            arrow.color.b = 1.0;
+        } else {
+            arrow.color.r = 1.0;
+            arrow.color.g = 0.0;
+            arrow.color.b = 1.0;
+        }
+        markers.markers.push_back(arrow);
+    }
+    pathEndpointsPub_.publish(markers);
 }
 
 int main(int argc, char** argv){

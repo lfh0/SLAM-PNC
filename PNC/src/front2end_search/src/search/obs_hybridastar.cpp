@@ -1,4 +1,4 @@
-#include <path_searching/kino_astar.h>
+#include <path_searching/obs_hybridastar.h>
 
 #include <iostream>
 #include <numeric>
@@ -10,12 +10,12 @@ using namespace Eigen;
 
 namespace path_searching
 {
-  KinoAstar::KinoAstar()
+  ObsHybridAstar::ObsHybridAstar()
   {
     
   }
 
-  KinoAstar::~KinoAstar()
+  ObsHybridAstar::~ObsHybridAstar()
   {
     for (int i = 0; i < allocate_num_; i++)
     {
@@ -23,7 +23,7 @@ namespace path_searching
     }
   }
 
-  void KinoAstar::setMap(const nav_msgs::OccupancyGrid& map)
+  void ObsHybridAstar::setMap(const nav_msgs::OccupancyGrid& map)
   {
     globalMap_ = map;
     resolution_ = globalMap_.info.resolution;
@@ -38,37 +38,38 @@ namespace path_searching
     {
       occupancy_buffer_2d_[i] = globalMap_.data[i];
     }
-    ROS_INFO("KinoAstar map set from PlanningServer: size=(%d,%d), resolution=%.3f",
+    ROS_INFO("ObsHybridAstar map set from PlanningServer: size=(%d,%d), resolution=%.3f",
              global_map_size_.x(), global_map_size_.y(), resolution_);
   }
 
-  void KinoAstar::init(ros::NodeHandle& nh)
+  void ObsHybridAstar::init(ros::NodeHandle& nh)
   {
       nh_ = nh;
     
-      nh_.param("search/horizon", horizon_, 50.0);
-      nh_.param("search/yaw_resolution", yaw_resolution_, 0.3);
-      nh_.param("search/lambda_heu", lambda_heu_, 1.5);
-      nh_.param("search/allocate_num", allocate_num_, 500000);
-      nh_.param("search/check_num", check_num_, 5);
-      nh_.param("search/max_search_time", max_seach_time, 3000.1);
-      nh_.param("search/occupied_threshold", occupied_threshold_, 50);
-      nh_.param("search/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
-      nh_.param("search/unknown_as_occupied", unknown_as_occupied_, true);
-      nh_.param("search/traj_forward_penalty", traj_forward_penalty, 1.0);
-      nh_.param("search/traj_back_penalty", traj_back_penalty, 5.0);
-      nh_.param("search/traj_gear_switch_penalty", traj_gear_switch_penalty, 0.0);
-      nh_.param("search/traj_steer_penalty", traj_steer_penalty, 0.2);
-      nh_.param("search/traj_steer_change_penalty", traj_steer_change_penalty, 0.0);
-      nh_.param("search/step_arc", step_arc, 1.0);//2.0
-      nh_.param("search/checkl", checkl, 0.2);
+      nh_.param("obs_hybridastar/horizon", horizon_, 50.0);
+      nh_.param("obs_hybridastar/yaw_resolution", yaw_resolution_, 0.3);
+      nh_.param("obs_hybridastar/lambda_heu", lambda_heu_, 1.5);
+      nh_.param("obs_hybridastar/allocate_num", allocate_num_, 500000);
+      nh_.param("obs_hybridastar/check_num", check_num_, 5);
+      nh_.param("obs_hybridastar/max_search_time", max_seach_time, 3000.1);
+      nh_.param("obs_hybridastar/occupied_threshold", occupied_threshold_, 50);
+      nh_.param("obs_hybridastar/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
+      nh_.param("obs_hybridastar/unknown_as_occupied", unknown_as_occupied_, true);
+      nh_.param("obs_hybridastar/traj_forward_penalty", traj_forward_penalty, 1.0);
+      nh_.param("obs_hybridastar/traj_back_penalty", traj_back_penalty, 5.0);
+      nh_.param("obs_hybridastar/traj_gear_switch_penalty", traj_gear_switch_penalty, 0.0);
+      nh_.param("obs_hybridastar/traj_steer_penalty", traj_steer_penalty, 0.2);
+      nh_.param("obs_hybridastar/traj_steer_change_penalty", traj_steer_change_penalty, 0.0);
+      nh_.param("obs_hybridastar/step_arc", step_arc, 1.0);//2.0
+      nh_.param("obs_hybridastar/checkl", checkl, 0.2);
 
-      nh_.param("vehicle/car_width", car_width_, 0.6);
-      nh_.param("vehicle/car_length", car_length_, 1.0);
-      nh_.param("vehicle/car_wheelbase", car_wheelbase_, 0.8);
-      nh_.param("vehicle/car_d_cr", car_d_cr_, 0.0);
+      nh_.param("obs_hybridastar/vehicle/car_width", car_width_, 0.6);
+      nh_.param("obs_hybridastar/vehicle/car_length", car_length_, 1.0);
+      nh_.param("obs_hybridastar/vehicle/car_wheelbase", car_wheelbase_, 0.8);
+      nh_.param("obs_hybridastar/vehicle/car_d_cr", car_d_cr_, 0.0);
 
-      nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
+      ros::NodeHandle private_nh("~");
+      private_nh.param<std::string>("search/map_topic", map_topic_, "/projected_map");
 
       /* ---------- pre-allocated node ---------- */
       path_node_pool_.resize(allocate_num_);
@@ -84,14 +85,14 @@ namespace path_searching
       iter_num_ = 0;
 
       
-      nh_.param("search/max_vel", max_vel_, 0.5);
-      nh_.param("search/max_acc", max_acc_, 0.3);
-      nh_.param("search/max_cur", max_cur_, 0.3);
-      nh_.param("vehicle/car_max_steering_angle", max_steer_, 45.0);
+      nh_.param("obs_hybridastar/max_vel", max_vel_, 0.5);
+      nh_.param("obs_hybridastar/max_acc", max_acc_, 0.3);
+      nh_.param("obs_hybridastar/max_cur", max_cur_, 0.3);
+      nh_.param("obs_hybridastar/vehicle/car_max_steering_angle", max_steer_, 45.0);
 
-      nh_.param("search/time_resolution", time_resolution_, 0.1);
-      nh_.param("search/distance_resolution", distance_resolution_, 0.5);
-      nh_.param("search/velocity_resolution", velocity_resolution_, 0.5);
+      nh_.param("obs_hybridastar/time_resolution", time_resolution_, 0.1);
+      nh_.param("obs_hybridastar/distance_resolution", distance_resolution_, 0.5);
+      nh_.param("obs_hybridastar/velocity_resolution", velocity_resolution_, 0.5);
       max_steer_ = max_steer_ * M_PI / 180.0;
 
       min_vel_ = -max_vel_;
@@ -153,14 +154,14 @@ namespace path_searching
   }
 
 
-  bool KinoAstar::isInMap2d(const Eigen::Vector2d &pos)
+  bool ObsHybridAstar::isInMap2d(const Eigen::Vector2d &pos)
   {
       Eigen::Vector2i idx;
       posToIndex2d(pos, idx);
       return isInMap2d(idx);
   }
 
-  bool KinoAstar::isInMap2d(const Eigen::Vector2i &id)
+  bool ObsHybridAstar::isInMap2d(const Eigen::Vector2i &id)
   {
       if(id(0) < 0 || id(0) >= global_map_size_(0) || id(1) < 0 || id(1) >= global_map_size_(1))
       {
@@ -170,7 +171,7 @@ namespace path_searching
           return true;
   };
 
-  void KinoAstar::posToIndex2d(const Eigen::Vector2d& pos, Eigen::Vector2i& id)
+  void ObsHybridAstar::posToIndex2d(const Eigen::Vector2d& pos, Eigen::Vector2i& id)
   {
       for(int i = 0; i < 2; i++)
       {
@@ -178,7 +179,7 @@ namespace path_searching
       }
   }
 
-  void KinoAstar::indexToPos2d(const Eigen::Vector2i& id, Eigen::Vector2d& pos)
+  void ObsHybridAstar::indexToPos2d(const Eigen::Vector2i& id, Eigen::Vector2d& pos)
   {
       for(int i = 0; i < 2; i++)
       {
@@ -186,7 +187,7 @@ namespace path_searching
       }
   }
 
-  int KinoAstar::getVoxelState2d(const Eigen::Vector2d &pos)
+  int ObsHybridAstar::getVoxelState2d(const Eigen::Vector2d &pos)
   {
       Eigen::Vector2i id;
       posToIndex2d(pos, id);
@@ -196,13 +197,13 @@ namespace path_searching
       return occupancy_buffer_2d_[id(1) * global_map_size_(0) + id(0)];
   }
 
-  bool KinoAstar::isOccupied(const Eigen::Vector2d& pos)
+  bool ObsHybridAstar::isOccupied(const Eigen::Vector2d& pos)
 	{
 		const int state = getVoxelState2d(pos);
     return (unknown_as_occupied_ && state < 0) || state >= occupied_threshold_;
 	}
 
-  bool KinoAstar::isOccupied(const Eigen::Vector2i& id)
+  bool ObsHybridAstar::isOccupied(const Eigen::Vector2i& id)
 	{
 		Eigen::Vector2d pos;
 		indexToPos2d(id, pos);
@@ -210,7 +211,7 @@ namespace path_searching
     return (unknown_as_occupied_ && state < 0) || state >= occupied_threshold_;
 	}
 
-  int KinoAstar::yawToIndex(double& yaw)
+  int ObsHybridAstar::yawToIndex(double& yaw)
   {
     double normalized_yaw = normalize_angle(yaw);
     int idx = floor((normalized_yaw - yaw_origin_) * inv_yaw_resolution_);
@@ -224,7 +225,7 @@ namespace path_searching
     return idx;
   }
 
-  void KinoAstar::stateTransit(Eigen::Vector3d &state0,  Eigen::Vector3d &state1,
+  void ObsHybridAstar::stateTransit(Eigen::Vector3d &state0,  Eigen::Vector3d &state1,
               Eigen::Vector2d &ctrl_input)
   {
       //helpful var
@@ -243,7 +244,7 @@ namespace path_searching
       }
   }
 
-  void KinoAstar::checkCollisionUsingPosAndYaw(const Eigen::Vector3d &state, bool &res)
+  void ObsHybridAstar::checkCollisionUsingPosAndYaw(const Eigen::Vector3d &state, bool &res)
   {
       res = false;
       Eigen::Vector2d pos = state.head(2);
@@ -273,7 +274,7 @@ namespace path_searching
       }
   }
 
-  void KinoAstar::checkCollisionUsingLine(const Eigen::Vector2d &start_pt, const Eigen::Vector2d &end_pt, bool &res)
+  void ObsHybridAstar::checkCollisionUsingLine(const Eigen::Vector2d &start_pt, const Eigen::Vector2d &end_pt, bool &res)
   {
       res = false;
       RayCaster raycaster;
@@ -293,7 +294,7 @@ namespace path_searching
       }
   }
 
-  void KinoAstar::ConvertNodePathToPointPath(vector<PathNodePtr> path_nodes_)
+  void ObsHybridAstar::ConvertNodePathToPointPath(vector<PathNodePtr> path_nodes_)
   {
     for(size_t i = 0; i < path_nodes_.size(); i++)
     {
@@ -302,7 +303,7 @@ namespace path_searching
     }
   }
 
-  int KinoAstar::search(Eigen::Vector4d start_state, Eigen::Vector2d init_ctrl,
+  int ObsHybridAstar::search(Eigen::Vector4d start_state, Eigen::Vector2d init_ctrl,
                                Eigen::Vector4d end_state)
   {
     ros::Time t1 = ros::Time::now();
@@ -312,7 +313,7 @@ namespace path_searching
     Eigen::Vector2d goal_pos = end_state.head(2);
 
     if (!isInMap2d(start_pos) || !isInMap2d(goal_pos)) {
-			ROS_WARN("kino astar Start or goal position out of map boundary!");
+			ROS_WARN("obs hybrid astar Start or goal position out of map boundary!");
 			return NO_PATH;
 		}
 
@@ -372,7 +373,7 @@ namespace path_searching
         retrievePath(terminate_node);
         ConvertNodePathToPointPath(path_nodes_);
         ros::Time t3 = ros::Time::now();
-        std::cout<<" kinoastar time: "<<(t3-t1).toSec() * 1000 <<" ms" << " iter_num_: " << iter_num_ <<std::endl;
+        std::cout<<" obs_hybridastar time: "<<(t3-t1).toSec() * 1000 <<" ms" << " iter_num_: " << iter_num_ <<std::endl;
 
         ompl::base::ScopedState<> from(shotptr), to(shotptr), s(shotptr);
         Eigen::Vector3d state1, state2;
@@ -572,7 +573,7 @@ namespace path_searching
   }
 
 
-  bool KinoAstar::is_shot_sucess(Eigen::Vector3d state1,Eigen::Vector3d state2){
+  bool ObsHybridAstar::is_shot_sucess(Eigen::Vector3d state1,Eigen::Vector3d state2){
     
     std::vector<Eigen::Vector3d> path_list;
     double len;
@@ -591,7 +592,7 @@ namespace path_searching
     return true;
   }
 
-  double KinoAstar::computeShotTraj(Eigen::Vector3d &state1, Eigen::Vector3d &state2,
+  double ObsHybridAstar::computeShotTraj(Eigen::Vector3d &state1, Eigen::Vector3d &state2,
                                     std::vector<Eigen::Vector3d> &path_list,
                                     double& len){
     namespace ob = ompl::base;
@@ -614,7 +615,7 @@ namespace path_searching
   }
 
   // to retrieve the path to the correct order
-  void KinoAstar::retrievePath(PathNodePtr end_node)
+  void ObsHybridAstar::retrievePath(PathNodePtr end_node)
   {
     PathNodePtr cur_node = end_node;
     path_nodes_.push_back(cur_node);
@@ -628,7 +629,7 @@ namespace path_searching
     reverse(path_nodes_.begin(), path_nodes_.end());
   }
 
-  void KinoAstar::reset()
+  void ObsHybridAstar::reset()
   {
     expanded_nodes_.clear();
     path_nodes_.clear();
@@ -650,7 +651,7 @@ namespace path_searching
   }
 
   const double kPi = acos(-1.0);// pai
-  double KinoAstar::normalize_angle(const double& theta)
+  double ObsHybridAstar::normalize_angle(const double& theta)
   {
     double theta_tmp = theta;
     theta_tmp -= (theta >= kPi) * 2 * kPi;
@@ -658,7 +659,7 @@ namespace path_searching
     return theta_tmp;
   }
 
-  void KinoAstar::getFlatState(Eigen::Vector4d state, Eigen::Vector2d control_input,
+  void ObsHybridAstar::getFlatState(Eigen::Vector4d state, Eigen::Vector2d control_input,
                                   Eigen::MatrixXd &flat_state, int singul)
   {
 

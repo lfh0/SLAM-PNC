@@ -48,6 +48,7 @@ namespace plan_manage
     double wei_surround_;                       // surround weight
     double wei_feas_;                        // feasibility weight
     double wei_time_;                        // time weight
+    double wei_anchor_;                      // RDP内部关键点锚定权重
     double surround_clearance_; // safe distance
     double max_vel_, max_acc_, max_cur_;       // dynamic limits
     double half_margin;                        // safe margin
@@ -68,6 +69,7 @@ namespace plan_manage
     std::vector<int> singul_container;
     std::vector<Eigen::MatrixXd> iniState_container;
     std::vector<Eigen::MatrixXd> finState_container;
+    std::vector<Eigen::MatrixXd> anchor_points_container;
     std::vector<std::vector<Eigen::MatrixXd>> cfgHs_container;
     std::vector<Eigen::VectorXd> piece_time_ratios_container;
     int trajnum;//轨迹只有一条，所以trajnum = 1

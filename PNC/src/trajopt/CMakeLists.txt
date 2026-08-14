@@ -18,16 +18,12 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   sensor_msgs
   nav_msgs
+  robot_trajectory_msgs
   visualization_msgs
   roslib
   tf
   controller
   decomp_ros_utils
-)
-
-add_service_files(
-  FILES
-  SendPath.srv
 )
 
 find_package(Protobuf REQUIRED)
@@ -74,7 +70,7 @@ catkin_package(
     INCLUDE_DIRS include ${THIRD_PARTY_INCLUDE_DIRS}
     ${CMAKE_CURRENT_BINARY_DIR}
     ${PLAN_UTILS_INCLUDE_DIRS}
-    CATKIN_DEPENDS controller decomp_ros_utils #mpc 
+    CATKIN_DEPENDS controller decomp_ros_utils robot_trajectory_msgs #mpc 
     # traj_server_ros
 )
 

@@ -1,0 +1,33 @@
+hybridastar:
+  # 状态与运动原语离散参数。
+  yaw_grid_size: 72
+  primitive_length: 1.6
+  primitive_sample_step: 0.2
+  steering_discrete_num: 1
+
+  # 搜索代价参数。
+  forward_penalty: 1.0
+  reverse_penalty: 3.0
+  gear_switch_penalty: 2.0
+  steering_penalty: 1.5
+  steering_change_penalty: 2.0
+  heuristic_weight: 1.0001
+  reeds_shepp_switch_distance: 8.0
+  analytic_expansion_distance: 5.0
+
+  # 终点判定与搜索限制参数。
+  goal_position_tolerance: 0.2
+  goal_yaw_tolerance: 0.15
+  max_iterations: 10000000
+  max_search_time: 20
+
+  # 搜索结束后发布的搜索树最大边数，避免调试消息过大。
+  search_tree_max_edges: 20000
+
+  # 车辆状态中的位置表示后轴中心。
+  vehicle:
+    width: 0.6
+    length: 0.8
+    wheel_base: 2.0
+    rear_overhang: 0.1
+    max_steering_angle_deg: 30.0

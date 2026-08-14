@@ -1,23 +1,15 @@
-# 订阅话题
-topics:
-  global_map: "/global_costmap_node/costmap/costmap"
-  odom: "/lio/robo/odom"
-  path: "/astar_path"
-  debug_path: "/trajopt/debug_path"
-  path_endpoints: "/trajopt/path_endpoints"
-
 # 安全走廊参数
 corridor:
   collision_cost_threshold: 90
   unknown_as_occupied: true
   # 每条路径段前后和左右允许生成走廊的最大范围
-  max_longitudinal: 1.5
-  max_lateral: 1.5
+  max_longitudinal: 0.3
+  max_lateral: 0.35
   # 按几何约束一次完成路径段拆分和合并
-  min_seed_length: 0.25
-  max_seed_length: 2.0
-  max_seed_deviation: 0.1
-  max_seed_yaw_error: 0.2
+  min_seed_length: 0.1
+  max_seed_length: 3.0
+  max_seed_deviation: 0.05
+  max_seed_yaw_error: 0.3
   # 相邻凸走廊真实交集的最小面积，单位m²
   min_overlap_area: 0.01
 
@@ -25,13 +17,15 @@ corridor:
 optimizing:
   traj_resolution: 8
   des_traj_resolution: 20
-  wei_sta_obs: 100000.0
+  wei_sta_obs: 10000000.0
   wei_dyn_obs: 7000.0
-  wei_feas: 1000.0
+  wei_feas: 100000.0
   wei_time: 500.0
+  # 内部关键点锚定权重，抑制 MINCO 将 RDP 关键点拉得过远
+  wei_anchor: 50.0
   dyn_obs_clearance: 1.0
-  max_vel: 3.0
-  max_acc: 1.5
+  max_vel: 0.7
+  max_acc: 0.5
   max_cur: 0.523598
   half_margin: 0.25
 
@@ -40,6 +34,19 @@ initial_time:
   min_speed: 0.2
   min_piece_time: 0.2
   min_turn_speed_ratio: 0.25
+
+# MINCO 首尾边界朝向约束
+boundary:
+  # 开启时使用 start_yaw_source 构造 0.01 m/s 的起点速度向量
+  consider_start_yaw: false
+  # 普通导航先不要强制终点朝向，避免 goal yaw 与路径切向冲突产生回环
+  consider_end_yaw: false
+  # path: 使用前端路径前/后视切向；odom: 使用当前里程计 yaw；goal: 使用目标点 yaw
+  start_yaw_source: "path"
+  end_yaw_source: "path"
+  path_yaw_lookahead_distance: 0.5
+  # odom/goal yaw 与路径切向偏差超过该值时，自动回退到路径切向
+  max_yaw_mismatch: 1.0472
 
 # 优化结果发布前验收参数
 validation:

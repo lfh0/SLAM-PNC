@@ -1,0 +1,10 @@
+rrt:
+  step_size: 1.0
+  goal_bias: 0.7
+  search_radius: 3.0
+  max_search_time: 50000.0
+  max_iterations: 500000
+
+  occupied_threshold: 80
+  obstacle_cost_weight: 5.0
+  unknown_as_occupied: true

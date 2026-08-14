@@ -4,9 +4,14 @@
     </node>
     <rosparam file="$(find navi_map)/config/missionmarker_map.yaml" command="load" />
 
-    <node pkg="navi_map" type="map_maintain_node" name="map_maintain_node" output="screen" />
+    <node pkg="navi_map" type="map_maintain_node" name="map_maintain_node" output="screen">
+        <param name="odom_topic" value="/lio/odom" />
+        <param name="static_map_topic" value="/merged_map" />
+    </node>
 
-    <node pkg="navi_map" type="navi_map_missionmaker" name="navi_map_missionmaker" output="screen" />
+    <node pkg="navi_map" type="navi_map_missionmaker" name="navi_map_missionmaker" output="screen">
+        <param name="goal_topic" value="/move_base_simple/goal" />
+    </node>
 
     <node name="rviz" pkg="rviz" type="rviz" required="true" args="-d $(find navi_map)/rviz/missionmarker.rviz" />     
 

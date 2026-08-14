@@ -14,13 +14,11 @@ int main (int argc, char **argv)
   ros::NodeHandle nh;
   std::string pcd_file_path;
   std::string pointcloudFrame;
-  std::string readpcd_topic;
   int meanK;
   double Thresh;
   pcl::PointCloud<pcl::PointXYZ> cloud_output;
 
 
-  nh.getParam("navi_map/output/readpcd_topic", readpcd_topic);
   nh.getParam("navi_map/map_dir/pcd_file_path", pcd_file_path);
   std::cout << "pcd_file_path"<<pcd_file_path << std::endl;
   nh.getParam("navi_map/frame/pointcloudFrame", pointcloudFrame);
@@ -28,7 +26,7 @@ int main (int argc, char **argv)
   nh.getParam("navi_map/OutlierRemoval/Thresh", Thresh);
 
 
-  ros::Publisher pcl_pub = nh.advertise<sensor_msgs::PointCloud2> (readpcd_topic, 1);
+  ros::Publisher pcl_pub = nh.advertise<sensor_msgs::PointCloud2> ("/readpcd", 1);
 
   // 加载点云文件
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_input(new pcl::PointCloud<pcl::PointXYZ>);

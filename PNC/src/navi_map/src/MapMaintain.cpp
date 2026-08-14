@@ -33,6 +33,7 @@ private:
     float localMapSize_;
     std::string mapFrameId_;
     std::string odomTopic_;
+    std::string staticMapTopic_;
 
 private:
     void staticMapCallBack(const nav_msgs::OccupancyGrid::ConstPtr &msg);
@@ -44,7 +45,7 @@ public:
     ~MapMaintain();
 };
 
-MapMaintain::MapMaintain(ros::NodeHandle nh, ros::NodeHandle):
+MapMaintain::MapMaintain(ros::NodeHandle nh, ros::NodeHandle private_nh):
 nh_(nh)
 {
     ROS_INFO("this is map_maintain process node!...");
@@ -53,10 +54,11 @@ nh_(nh)
     nh_.param<float>("navi_map/mapmaintain/inflation_radius", inflationRadius_, 0.7);
     nh_.param<float>("navi_map/mapmaintain/local_map_size", localMapSize_, 5.0);
     nh_.param<std::string>("navi_map/frame/mapFrame", mapFrameId_, "map");
-    nh_.param<std::string>("navi_map/mapmaintain/odom_topic", odomTopic_, "/lio/odom");
+    private_nh.param<std::string>("odom_topic", odomTopic_, "/lio/odom");
+    private_nh.param<std::string>("static_map_topic", staticMapTopic_, "/merged_map");
 
     odomSub_ = nh_.subscribe<nav_msgs::Odometry>(odomTopic_, 10, &MapMaintain::odomCallBack, this);
-    staticMapSub_ = nh_.subscribe<nav_msgs::OccupancyGrid>("/merged_map", 10, &MapMaintain::staticMapCallBack, this);
+    staticMapSub_ = nh_.subscribe<nav_msgs::OccupancyGrid>(staticMapTopic_, 10, &MapMaintain::staticMapCallBack, this);
 
     globalMapPub_ = nh_.advertise<nav_msgs::OccupancyGrid>("/global_map", 10);
     localMapPub_ = nh_.advertise<nav_msgs::OccupancyGrid>("/local_map", 10);

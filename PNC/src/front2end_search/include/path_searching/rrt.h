@@ -32,7 +32,7 @@ public:
 	void init(ros::NodeHandle& nh);
     void setMap(const nav_msgs::OccupancyGrid& map);
     int search(const Eigen::Vector2d& start_pos, const Eigen::Vector2d& goal_pos);
-    std::vector<Eigen::Vector2d> getKinoPath(){return final_path_;}
+    std::vector<Eigen::Vector2d> getPath(){return final_path_;}
     void reset();
     enum { REACH_HORIZON = 1, REACH_END = 2,  NO_PATH = 3, REACH_END_BUT_SHOT_FAILS = 4};
 

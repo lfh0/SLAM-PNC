@@ -7,6 +7,9 @@
     <rosparam command="load" file="$(find trajopt)/config/trajopt.yaml" />
 
     <node name="traj_opt" pkg="trajopt" type="traj_opt" output="screen">
+        <param name="topics/global_map" value="/global_costmap_node/costmap/costmap" />
+        <param name="topics/odom" value="/lio/robo/odom" />
+        <param name="topics/path" value="/astar_path" />
     </node>
     
 </launch>

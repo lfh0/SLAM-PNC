@@ -11,7 +11,6 @@ navi_map:
   mapmaintain:
     inflation_radius: 0.3
     local_map_size: 8.0
-    odom_topic: /lio/odom
 
   sensor:
     height: 1.0
@@ -27,7 +26,3 @@ navi_map:
     dist_thresh: 0.2
     max_tilt_deg: 5.0
     max_iters: 100
-    topic: /remove_outliers/pointcloud
-
-  output:
-    readpcd_topic: /readpcd

@@ -160,7 +160,7 @@ public:
 
     void retrievePath(JPSNodePtr end_node);
     void ConvertNodePathToPointPath(vector<JPSNodePtr> path_nodes_);
-    vector<Eigen::Vector2d> getKinoPath(){return final_path_;}
+    vector<Eigen::Vector2d> getPath(){return final_path_;}
 
     // 跳跃函数
     int search(Eigen::Vector2d& start_pos, Eigen::Vector2d& goal_pos);

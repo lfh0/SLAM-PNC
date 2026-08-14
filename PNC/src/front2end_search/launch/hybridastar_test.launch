@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+
+<launch>
+    <rosparam command="load" file="$(find front2end_search)/config/hybridastar.yaml" />
+    <node name="map_load" pkg="map_server" type="map_server" args="$(find navi_map)/maps/lab212road.yaml" />
+    <node name="hybridastar" pkg="front2end_search" type="hybridastar_node" output="screen">
+        <param name="search/map_topic" value="/map" />
+        <param name="planner/odom_topic" value="/lio/robo/odom" />
+        <param name="planner/goal_topic" value="/move_base_simple/goal" />
+    </node>
+    <node name="rviz_searchhybridastar" pkg="rviz" type="rviz" required="true" args="-d $(find navi_map)/rviz/navi_2d.rviz" />     
+
+</launch>

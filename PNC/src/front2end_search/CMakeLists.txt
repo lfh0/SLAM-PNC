@@ -34,10 +34,17 @@ catkin_package(
 
 add_executable(planning_server
     src/app/PlanningServer.cpp
-    src/search/kino_astar.cpp
+    src/search/obs_hybridastar.cpp
     src/search/astar.cpp
     src/search/jps.cpp
     src/search/rrt.cpp
 )
 
 target_link_libraries(planning_server ${catkin_LIBRARIES} ompl)
+
+add_executable(hybridastar_node
+    src/app/HybridAstarNode.cpp
+    src/search/hybridastar.cpp
+)
+
+target_link_libraries(hybridastar_node ${catkin_LIBRARIES} ompl)

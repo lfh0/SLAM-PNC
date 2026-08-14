@@ -27,16 +27,17 @@ void RRT::init(ros::NodeHandle& nh) {
     nh_.param("rrt/search_radius", search_radius_, 3.0);
     nh_.param("rrt/max_search_time", max_search_time_, 50000.0);
     nh_.param("rrt/max_iterations", max_iterations_, 50000);
-    nh_.param("search/occupied_threshold", occupied_threshold_, 50);
-    nh_.param("search/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
-    nh_.param("search/unknown_as_occupied", unknown_as_occupied_, true);
+    nh_.param("rrt/occupied_threshold", occupied_threshold_, 50);
+    nh_.param("rrt/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
+    nh_.param("rrt/unknown_as_occupied", unknown_as_occupied_, true);
     
     // 初始化随机数生成器范围（会在setMap中更新）
     x_dist_ = std::uniform_real_distribution<>(0.0, 10.0);
     y_dist_ = std::uniform_real_distribution<>(0.0, 10.0);
     bias_dist_ = std::uniform_real_distribution<>(0.0, 1.0);
     
-    nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
+    ros::NodeHandle private_nh("~");
+    private_nh.param<std::string>("search/map_topic", map_topic_, "/projected_map");
 }
 
 void RRT::setMap(const nav_msgs::OccupancyGrid& map) {

@@ -1,0 +1,11 @@
+<launch>
+    <rosparam command="load" file="$(find controller)/config/mpc.yaml" />
+    <rosparam command="load" file="$(find controller)/config/controller_server.yaml" />
+
+    <param name="/controller_server/controller_type" value="1" />
+
+    <node pkg="controller" type="controller_server" name="controller_server" output="screen">
+        <param name="trajectory_topic" value="/trajopt/minco_traj" />
+        <param name="odom_topic" value="/lio/robo/odom" />
+    </node>
+</launch>

@@ -15,7 +15,10 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   tf2
   std_msgs
+  robot_trajectory_msgs
+  yhs_can_msgs
 )
+find_package(OsqpEigen REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -109,7 +112,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
 #  LIBRARIES controller
-  CATKIN_DEPENDS roscpp std_msgs nav_msgs geometry_msgs tf2
+  CATKIN_DEPENDS roscpp std_msgs nav_msgs geometry_msgs tf2 robot_trajectory_msgs yhs_can_msgs
 #  DEPENDS system_lib
 )
 
@@ -211,7 +214,9 @@ include_directories(
 add_executable(controller_server
   src/app/Controller_server.cpp
   src/controller/purepursuit.cpp
+  src/controller/mpc.cpp
 )
 target_link_libraries(controller_server
   ${catkin_LIBRARIES}
+  OsqpEigen::OsqpEigen
 )

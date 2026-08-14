@@ -3,19 +3,35 @@
 <launch>
     <arg name="start_costmap" default="true" />
     <arg name="controller" default="true" />
+    <arg name="trajopt" default="true" />
     <group if="$(arg start_costmap)">
         <include file="$(find navi_map)/launch/global_inflation_local_obstacle.launch" />
     </group>
 
+    <group if="$(arg trajopt)">
+        <include file="$(find trajopt)/launch/trajopt.launch" />
+    </group>
+
     <group if="$(arg controller)">
-        <include file="$(find controller)/launch/purepursuit.launch" />
+        <include file="$(find controller)/launch/mpc.launch" />
+        <!-- <include file="$(find controller)/launch/purepursuit.launch" /> -->
+
     </group>
     
-    <rosparam command="load" file="$(find front2end_search)/config/navigation.yaml" />
+    <!-- 各代码模块的算法参数分别加载，避免参数命名空间相互覆盖。 -->
+    <rosparam command="load" file="$(find front2end_search)/config/planning_server.yaml" />
+    <rosparam command="load" file="$(find front2end_search)/config/astar.yaml" />
+    <rosparam command="load" file="$(find front2end_search)/config/jps.yaml" />
+    <rosparam command="load" file="$(find front2end_search)/config/obs_hybridastar.yaml" />
+    <rosparam command="load" file="$(find front2end_search)/config/rrt.yaml" />
 
-    <node name="rviz_search" pkg="rviz" type="rviz" required="true" args="-d $(find navi_map)/rviz/navi_2d.rviz" />     
+    <node name="rviz_search" pkg="rviz" type="rviz" required="false" args="-d $(find navi_map)/rviz/navi_2d.rviz" />
 
-    <node name="planning_server" pkg="front2end_search" type="planning_server" output="screen" />
+    <node name="planning_server" pkg="front2end_search" type="planning_server" output="screen">
+        <param name="search/map_topic" value="/global_costmap_node/costmap/costmap" />
+        <param name="planner/odom_topic" value="/lio/robo/odom" />
+        <param name="planner/goal_topic" value="/move_base_simple/goal" />
+    </node>
 
 
 </launch>

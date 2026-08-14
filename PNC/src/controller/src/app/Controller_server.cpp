@@ -2,6 +2,8 @@
 
 #include <geometry_msgs/Twist.h>
 #include <tf2/utils.h>
+#include <yhs_can_msgs/ctrl_cmd.h>
+#include <yhs_can_msgs/steering_ctrl_cmd.h>
 
 #include <algorithm>
 #include <clocale>
@@ -11,7 +13,7 @@
 #include <limits>
 
 ControllerServer::ControllerServer(ros::NodeHandle nh)
-    : nh_(nh), pure_pursuit_(nh)
+    : nh_(nh), pure_pursuit_(nh), mpc_controller_(nh)
 {
     loadParams();
     setupRosIo();
@@ -19,14 +21,14 @@ ControllerServer::ControllerServer(ros::NodeHandle nh)
 
 bool ControllerServer::ok() const
 {
-    return controller_type_ == "pure_pursuit";
+    return controller_type_ == 0 || controller_type_ == 1;
 }
 
 void ControllerServer::spin()
 {
     ros::Rate loop_rate(rate_hz_);
-    ROS_INFO("controller_server started with controller_type=%s, rate=%.2fHz",
-             controller_type_.c_str(), rate_hz_);
+    ROS_INFO("controller_server started with controller_type=%d, rate=%.2fHz",
+             controller_type_, rate_hz_);
 
     while (ros::ok()) {
         ros::spinOnce();
@@ -34,44 +36,54 @@ void ControllerServer::spin()
         command.linear_velocity = 0.0;
         command.angular_velocity = 0.0;
 
-        if (odom_received_ && start_ && path_reset_) {
-            command = pure_pursuit_.PurePursuitbyYaw(robot_state_);
+        if (odom_received_ && path_reset_) {
+            if (controller_type_ == 0) {
+                command = pure_pursuit_.PurePursuitbyYaw(robot_state_);
+            } else if (controller_type_ == 1) {
+                command = mpc_controller_.computeCommand(robot_state_);
+            }
         }
 
-        if (command.state == ControlState::Finished) {
+        const bool finished_edge =
+            command.state == ControlState::Finished
+            && last_control_state_ != ControlState::Finished;
+        if (finished_edge) {
             if (!arrive_reported_) {
                 std_msgs::Bool arrive_msg;
                 arrive_msg.data = true;
                 pub_arrive_.publish(arrive_msg);
                 arrive_reported_ = true;
                 beginFinishOdomAveraging();
+                ROS_INFO("Arrive at the goal");
             }
-            ROS_INFO("Arrive at the goal");
-            // start_ = false;
+        }
+
+        const bool state_changed =
+            command.state != ControlState::None
+            && command.state != last_control_state_;
+        if (state_changed) {
+            publishStopBeforeStateTransition(command.state);
         }
 
         publishCommand(command);
+        last_control_state_ = command.state;
         loop_rate.sleep();
     }
 }
 
 void ControllerServer::loadParams()
 {
-    nh_.param<std::string>("controller_server/controller_type", controller_type_, "pure_pursuit");
+    nh_.param("controller_server/controller_type", controller_type_, 0);
     nh_.param("controller_server/rate", rate_hz_, 10.0);
     if (rate_hz_ <= 0.0) {
         ROS_WARN("controller_server/rate <= 0, use 10Hz");
         rate_hz_ = 10.0;
     }
 
-    nh_.param("controller_server/path_topic", path_topic_, std::string("/astar_path_o"));
-    nh_.param("controller_server/odom_topic", odom_topic_, std::string("/lio/robo/odom"));
-    nh_.param("controller_server/start_topic", start_topic_, std::string("/start"));
-    nh_.param("controller_server/cmd_vel_topic", cmd_vel_topic_, std::string("/cmd_vel"));
-    nh_.param("controller_server/sim_cmd_vel_topic", sim_cmd_vel_topic_, std::string("/car1/cmd_vel"));
-    nh_.param("controller_server/arrive_topic", arrive_topic_, std::string("/arrive/finish"));
-    nh_.param("controller_server/odom_path_topic", odom_path_topic_,
-              std::string("/controller/odom_path"));
+    ros::NodeHandle private_nh("~");
+    private_nh.param("path_topic", path_topic_, std::string("/astar_path_o"));
+    private_nh.param("trajectory_topic", trajectory_topic_, std::string("/trajopt/minco_traj"));
+    private_nh.param("odom_topic", odom_topic_, std::string("/lio/robo/odom"));
     nh_.param("controller_server/finish_error_log_path",
               finish_error_log_path_,
               std::string("/home/lfh/SLAM+PNC/PNC/src/controller/finish_error_log.txt"));
@@ -79,25 +91,37 @@ void ControllerServer::loadParams()
     nh_.param("controller_server/max_forward_linear_velocity", max_forward_linear_velocity_, 0.5);
     nh_.param("controller_server/max_backward_linear_velocity", max_backward_linear_velocity_, -0.3);
     nh_.param("controller_server/max_angular_velocity", max_angular_velocity_, 0.3);
+    nh_.param("controller_server/state_transition_stop_duration", state_transition_stop_duration_, 0.5);
     if (finish_average_frames_ <= 0) {
         ROS_WARN("controller_server/finish_average_frames <= 0, use 20");
         finish_average_frames_ = 20;
+    }
+    if (state_transition_stop_duration_ < 0.0) {
+        ROS_WARN("controller_server/state_transition_stop_duration < 0, use 0.5s");
+        state_transition_stop_duration_ = 0.5;
     }
 }
 
 void ControllerServer::setupRosIo()
 {
     sub_path_ = nh_.subscribe<nav_msgs::Path>(path_topic_, 1, &ControllerServer::pathCallback, this);
+    sub_trajectory_ = nh_.subscribe<robot_trajectory_msgs::RobotTrajectory>(
+        trajectory_topic_, 1, &ControllerServer::trajectoryCallback, this);
     sub_odom_ = nh_.subscribe<nav_msgs::Odometry>(odom_topic_, 1, &ControllerServer::odomCallback, this);
-    sub_start_ = nh_.subscribe<std_msgs::Bool>(start_topic_, 1, &ControllerServer::startCallback, this);
-    pub_cmd_ = nh_.advertise<geometry_msgs::Twist>(cmd_vel_topic_, 1);
-    pub_sim_cmd_ = nh_.advertise<geometry_msgs::Twist>(sim_cmd_vel_topic_, 1);
-    pub_arrive_ = nh_.advertise<std_msgs::Bool>(arrive_topic_, 1);
-    pub_odom_path_ = nh_.advertise<nav_msgs::Path>(odom_path_topic_, 1, true);
+    pub_cmd_ = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
+    pub_sim_cmd_ = nh_.advertise<geometry_msgs::Twist>("/car1/cmd_vel", 1);
+    pub_ctrl_cmd_ = nh_.advertise<yhs_can_msgs::ctrl_cmd>("/ctrl_cmd", 1);
+    pub_steering_ctrl_cmd_ = nh_.advertise<yhs_can_msgs::steering_ctrl_cmd>("/steering_ctrl_cmd", 1);
+    pub_arrive_ = nh_.advertise<std_msgs::Bool>("/arrive/finish", 1);
+    pub_odom_path_ = nh_.advertise<nav_msgs::Path>("/controller/odom_path", 1, true);
 }
 
 void ControllerServer::pathCallback(const nav_msgs::Path::ConstPtr& msg)
 {
+    if (controller_type_ != 0) {
+        return;
+    }
+
     // 新控制路径对应一次新的跟踪过程，清空并立即发布空的历史里程计轨迹。
     odom_path_.poses.clear();
     odom_path_.header.frame_id = msg->header.frame_id.empty()
@@ -108,9 +132,9 @@ void ControllerServer::pathCallback(const nav_msgs::Path::ConstPtr& msg)
     pub_odom_path_.publish(odom_path_);
 
     path_reset_ = pure_pursuit_.reset(*msg);
-    start_ = false;
     if (path_reset_) {
         arrive_reported_ = false;
+        last_control_state_ = ControlState::None;
         collecting_finish_odom_ = false;
         finish_log_written_ = false;
         finish_odom_samples_.clear();
@@ -123,12 +147,45 @@ void ControllerServer::pathCallback(const nav_msgs::Path::ConstPtr& msg)
     }
 }
 
+void ControllerServer::trajectoryCallback(
+    const robot_trajectory_msgs::RobotTrajectory::ConstPtr& msg)
+{
+    if (controller_type_ != 1) {
+        return;
+    }
+
+    odom_path_.poses.clear();
+    odom_path_.header.frame_id = msg->header.frame_id.empty()
+        ? std::string("map") : msg->header.frame_id;
+    odom_path_.header.stamp = ros::Time::now();
+    has_last_odom_path_point_ = false;
+    odom_path_active_ = true;
+    pub_odom_path_.publish(odom_path_);
+
+    path_reset_ = mpc_controller_.reset(*msg);
+    if (path_reset_) {
+        arrive_reported_ = false;
+        last_control_state_ = ControlState::None;
+        collecting_finish_odom_ = false;
+        finish_log_written_ = false;
+        finish_odom_samples_.clear();
+
+        const auto& goal_pose = msg->points.back().pose;
+        goal_point_.x = goal_pose.position.x;
+        goal_point_.y = goal_pose.position.y;
+        goal_point_.yaw = tf2::getYaw(goal_pose.orientation);
+        has_goal_point_ = true;
+    }
+}
+
 void ControllerServer::odomCallback(const nav_msgs::Odometry::ConstPtr& msg)
 {
     robot_state_.x = msg->pose.pose.position.x;
     robot_state_.y = msg->pose.pose.position.y;
     robot_state_.yaw = tf2::getYaw(msg->pose.pose.orientation);
-    robot_state_.linear_velocity = msg->twist.twist.linear.x;
+    robot_state_.linear_velocity =
+        msg->twist.twist.linear.x * std::cos(robot_state_.yaw)
+        + msg->twist.twist.linear.y * std::sin(robot_state_.yaw);
     robot_state_.angular_velocity = msg->twist.twist.angular.z;
     odom_received_ = true;
 
@@ -153,11 +210,6 @@ void ControllerServer::odomCallback(const nav_msgs::Odometry::ConstPtr& msg)
     collectFinishOdomSample(robot_state_);
 }
 
-void ControllerServer::startCallback(const std_msgs::Bool::ConstPtr& msg)
-{
-    start_ = msg->data;
-}
-
 void ControllerServer::publishCommand(const ControlCommand& command)
 {
     const ControlCommand limited_command = vwlimit(command);
@@ -165,8 +217,41 @@ void ControllerServer::publishCommand(const ControlCommand& command)
     cmd_msg.linear.x = limited_command.linear_velocity;
     cmd_msg.angular.z = limited_command.angular_velocity;
     pub_cmd_.publish(cmd_msg);
-    if (sim_cmd_vel_topic_ != cmd_vel_topic_) {
-        pub_sim_cmd_.publish(cmd_msg);
+    pub_sim_cmd_.publish(cmd_msg);
+
+    if (limited_command.state == ControlState::Init
+        || limited_command.state == ControlState::GoalYawAdjust) {
+        yhs_can_msgs::ctrl_cmd ctrl_cmd_msg;
+        ctrl_cmd_msg.ctrl_cmd_gear = 6;
+        ctrl_cmd_msg.ctrl_cmd_linear = 0.0;
+        ctrl_cmd_msg.ctrl_cmd_angular = limited_command.angular_velocity * 180.0 * M_1_PI;
+        ctrl_cmd_msg.ctrl_cmd_slipangle = 0.0;
+        pub_ctrl_cmd_.publish(ctrl_cmd_msg);
+        return;
+    }
+
+    yhs_can_msgs::steering_ctrl_cmd steering_cmd_msg;
+    steering_cmd_msg.ctrl_cmd_gear = 5;
+    steering_cmd_msg.steering_ctrl_cmd_velocity = limited_command.linear_velocity;
+    steering_cmd_msg.steering_ctrl_cmd_steering = limited_command.angular_velocity * 180.0 * M_1_PI;
+    steering_cmd_msg.steering_ctrl_cmd_slipangle = 0.0;
+    pub_steering_ctrl_cmd_.publish(steering_cmd_msg);
+}
+
+void ControllerServer::publishStopBeforeStateTransition(ControlState next_state)
+{
+    ControlCommand stop_command;
+    stop_command.state = next_state;
+    stop_command.linear_velocity = 0.0;
+    stop_command.angular_velocity = 0.0;
+
+    ros::Rate stop_rate(rate_hz_);
+    const ros::WallTime stop_end =
+        ros::WallTime::now() + ros::WallDuration(state_transition_stop_duration_);
+    while (ros::ok() && ros::WallTime::now() < stop_end) {
+        // 状态切换前持续发布零速度，避免上一状态的控制量残留。
+        publishCommand(stop_command);
+        stop_rate.sleep();
     }
 }
 

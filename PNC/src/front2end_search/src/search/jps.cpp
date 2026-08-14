@@ -47,18 +47,19 @@ namespace path_searching
 	    void JPS::init(ros::NodeHandle& nh)
 	{
 		nh_ = nh;
-		nh_.param("search/lambda_heu", lambda_heu_, 1.0);
-		nh_.param("search/allocate_num", allocate_num_, 500000);
-		nh_.param("search/max_search_time", max_seach_time, 5000.1);
-		nh_.param("search/occupied_threshold", occupied_threshold_, 50);
-		nh_.param("search/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
-		nh_.param("search/unknown_as_occupied", unknown_as_occupied_, true);
+		nh_.param("jps/lambda_heu", lambda_heu_, 1.0);
+		nh_.param("jps/allocate_num", allocate_num_, 500000);
+		nh_.param("jps/max_search_time", max_seach_time, 5000.1);
+		nh_.param("jps/occupied_threshold", occupied_threshold_, 50);
+		nh_.param("jps/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
+		nh_.param("jps/unknown_as_occupied", unknown_as_occupied_, true);
 
-			nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
-		open_set_pub_ = nh.advertise<visualization_msgs::Marker>("jps/open_set", 10);
-		close_set_pub_ = nh.advertise<visualization_msgs::Marker>("jps/close_set", 10);
-		path_pub_ = nh.advertise<visualization_msgs::Marker>("jps/path", 10);
-		jump_point_pub_ = nh.advertise<visualization_msgs::Marker>("jps/jump_points", 10);
+		ros::NodeHandle private_nh("~");
+		private_nh.param<std::string>("search/map_topic", map_topic_, "/projected_map");
+		open_set_pub_ = nh.advertise<visualization_msgs::Marker>("/jps/open_set", 10);
+		close_set_pub_ = nh.advertise<visualization_msgs::Marker>("/jps/close_set", 10);
+		path_pub_ = nh.advertise<visualization_msgs::Marker>("/jps/path", 10);
+		jump_point_pub_ = nh.advertise<visualization_msgs::Marker>("/jps/jump_points", 10);
 
 		/* ---------- pre-allocated node ---------- */
 		path_node_pool_.resize(allocate_num_);

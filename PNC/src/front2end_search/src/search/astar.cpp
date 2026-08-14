@@ -1,6 +1,7 @@
 #include <path_searching/astar.h>
 
 #include <iostream>
+#include <limits>
 #include <numeric>
 
 using namespace std;
@@ -44,19 +45,25 @@ namespace path_searching
 	void Astar::init(ros::NodeHandle& nh)
 	{
 		nh_ = nh;
-		nh_.param("search/lambda_heu", lambda_heu_, 1.0001);
-		nh_.param("search/allocate_num", allocate_num_, 500000);
-		nh_.param("search/max_search_time", max_seach_time, 5000.1);
-		nh_.param("search/use_search_window", use_search_window_, true);
-		nh_.param("search/search_window_margin", search_window_margin_, 20.0);
-		nh_.param("search/occupied_threshold", occupied_threshold_, 99);
-		nh_.param("search/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
-		nh_.param("search/unknown_as_occupied", unknown_as_occupied_, true);
+		nh_.param("astar/lambda_heu", lambda_heu_, 1.0001);
+		nh_.param("astar/allocate_num", allocate_num_, 500000);
+		nh_.param("astar/max_search_time", max_seach_time, 5000.1);
+		nh_.param("astar/use_search_window", use_search_window_, true);
+		nh_.param("astar/search_window_margin", search_window_margin_, 20.0);
+		nh_.param("astar/occupied_threshold", occupied_threshold_, 99);
+		nh_.param("astar/obstacle_cost_weight", obstacle_cost_weight_, 5.0);
+		nh_.param("astar/unknown_as_occupied", unknown_as_occupied_, true);
+		nh_.param("astar/yaw_prefix/enabled", yaw_prefix_enabled_, false);
+		nh_.param("astar/yaw_prefix/points", yaw_prefix_points_, 20);
+		nh_.param("astar/yaw_prefix/strict", yaw_prefix_strict_, false);
 
-			nh_.param<std::string>("search/map_topic", map_topic_, "/projected_map");
-			ROS_INFO("Astar map_topic=%s, occupied_threshold=%d, obstacle_cost_weight=%.3f, unknown_as_occupied=%d",
+			ros::NodeHandle private_nh("~");
+			private_nh.param<std::string>("search/map_topic", map_topic_, "/projected_map");
+			ROS_INFO("Astar map_topic=%s, occupied_threshold=%d, obstacle_cost_weight=%.3f, unknown_as_occupied=%d, yaw_prefix=(enabled=%d, points=%d, strict=%d)",
 			         map_topic_.c_str(), occupied_threshold_, obstacle_cost_weight_,
-			         static_cast<int>(unknown_as_occupied_));
+			         static_cast<int>(unknown_as_occupied_),
+			         static_cast<int>(yaw_prefix_enabled_), yaw_prefix_points_,
+			         static_cast<int>(yaw_prefix_strict_));
 
 		/* ---------- pre-allocated node ---------- */
 		path_node_pool_.resize(allocate_num_);
@@ -140,7 +147,81 @@ namespace path_searching
 		return (unknown_as_occupied_ && state < 0) || state >= occupied_threshold_;
 	}
 
+	bool Astar::buildYawPrefix(const Eigen::Vector2d& start_pos,
+	                           const double start_yaw,
+	                           std::vector<Eigen::Vector2d>& prefix,
+	                           Eigen::Vector2d& search_start)
+	{
+		prefix.clear();
+		search_start = start_pos;
+		if (!yaw_prefix_enabled_ || yaw_prefix_points_ <= 0) {
+			return true;
+		}
+		if (!std::isfinite(start_yaw)) {
+			ROS_WARN("Astar yaw prefix disabled for this search: start_yaw is not finite");
+			return !yaw_prefix_strict_;
+		}
+
+		prefix.push_back(start_pos);
+		Eigen::Vector2i last_idx;
+		posToIndex2d(start_pos, last_idx);
+		const Eigen::Vector2d direction(std::cos(start_yaw), std::sin(start_yaw));
+		const double sample_step = resolution_ * 0.25;
+		const int max_samples = std::max(4 * yaw_prefix_points_,
+		                                 yaw_prefix_points_ * 20);
+
+		for (int sample = 1;
+		     sample <= max_samples
+		     && static_cast<int>(prefix.size()) <= yaw_prefix_points_;
+		     ++sample) {
+			const Eigen::Vector2d candidate = start_pos
+				+ direction * (sample_step * static_cast<double>(sample));
+			Eigen::Vector2i candidate_idx;
+			posToIndex2d(candidate, candidate_idx);
+			if (candidate_idx == last_idx) {
+				continue;
+			}
+			if (!isInMap2d(candidate_idx) || !isInSearchWindow(candidate_idx)
+			    || isOccupied(candidate_idx)) {
+				ROS_WARN("Astar yaw prefix stopped at %zu/%d points: idx=(%d,%d), in_map=%d, in_window=%d, occupied=%d",
+				         prefix.size() - 1, yaw_prefix_points_,
+				         candidate_idx.x(), candidate_idx.y(),
+				         static_cast<int>(isInMap2d(candidate_idx)),
+				         static_cast<int>(isInSearchWindow(candidate_idx)),
+				         static_cast<int>(isInMap2d(candidate_idx) && isOccupied(candidate_idx)));
+				break;
+			}
+
+			Eigen::Vector2d cell_center;
+			indexToPos2d(candidate_idx, cell_center);
+			prefix.push_back(cell_center);
+			last_idx = candidate_idx;
+		}
+
+		const int generated_points = static_cast<int>(prefix.size()) - 1;
+		if (generated_points < yaw_prefix_points_) {
+			if (yaw_prefix_strict_) {
+				ROS_WARN("Astar yaw prefix strict mode failed: generated=%d required=%d",
+				         generated_points, yaw_prefix_points_);
+				return false;
+			}
+			ROS_WARN("Astar yaw prefix uses partial prefix: generated=%d required=%d",
+			         generated_points, yaw_prefix_points_);
+		}
+
+		search_start = prefix.back();
+		ROS_INFO("Astar yaw prefix generated %d points, start moved from (%.3f, %.3f) to (%.3f, %.3f), yaw=%.3f",
+		         generated_points, start_pos.x(), start_pos.y(),
+		         search_start.x(), search_start.y(), start_yaw);
+		return true;
+	}
+
 	int Astar::search(Eigen::Vector2d& start_pos, Eigen::Vector2d& goal_pos)
+	{
+		return search(start_pos, goal_pos, std::numeric_limits<double>::quiet_NaN());
+	}
+
+	int Astar::search(Eigen::Vector2d& start_pos, Eigen::Vector2d& goal_pos, const double start_yaw)
 	{
 		if (!isInMap2d(start_pos) || !isInMap2d(goal_pos)) {
 			Eigen::Vector2i start_idx, goal_idx;
@@ -180,12 +261,22 @@ namespace path_searching
 			         search_max_idx_(0), search_max_idx_(1),
 			         window_cells, search_window_margin_);
 		}
+
+		std::vector<Eigen::Vector2d> yaw_prefix;
+		Eigen::Vector2d guided_start_pos = start_pos;
+		if (!buildYawPrefix(start_pos, start_yaw, yaw_prefix, guided_start_pos)) {
+			return NO_PATH;
+		}
+		if (isOccupied(guided_start_pos)) {
+			ROS_WARN("Astar guided start position is occupied!");
+			return NO_PATH;
+		}
 		
 		ros::Time t1 = ros::Time::now();
 		AstarNodePtr cur_node = path_node_pool_[0];
 		cur_node->parent = NULL;
-    	cur_node->state = start_pos;
-    	posToIndex2d(start_pos, cur_node->index);
+    	cur_node->state = guided_start_pos;
+    	posToIndex2d(guided_start_pos, cur_node->index);
 		cur_node->g_score = 0.0;
 		cur_node->f_score = lambda_heu_ * getHeu(cur_node->state, goal_pos);
 		cur_node->node_state = IN_OPEN_SET;
@@ -208,6 +299,15 @@ namespace path_searching
 				terminate_node = cur_node;
 				retrievePath(terminate_node);
 				ConvertNodePathToPointPath(path_nodes_);
+				if (yaw_prefix.size() > 1) {
+					std::vector<Eigen::Vector2d> guided_path;
+					guided_path.reserve(yaw_prefix.size() + final_path_.size());
+					guided_path.insert(guided_path.end(),
+					                   yaw_prefix.begin(), yaw_prefix.end() - 1);
+					guided_path.insert(guided_path.end(),
+					                   final_path_.begin(), final_path_.end());
+					final_path_.swap(guided_path);
+				}
 
 				double original_length = 0.0;
 				std::vector<double> curvatures;

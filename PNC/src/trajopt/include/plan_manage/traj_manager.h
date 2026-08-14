@@ -22,7 +22,7 @@
 #include "decomp_ros_utils/data_ros_utils.h"
 
 // #include "plan_utils/CorridorBuilder2d.hpp"
-#include "path_searching/kino_astar.h"
+#include "path_searching/obs_hybridastar.h"
 #include "tf/tf.h"
 #include <tf2_ros/transform_listener.h>
 #include <pluginlib/class_loader.hpp>
@@ -107,7 +107,7 @@ private:
 
     //_____________________________________
     /* kinodynamic a star path and parking*/
-    std::unique_ptr<path_searching::KinoAstar> kino_path_finder_;
+    std::unique_ptr<path_searching::ObsHybridAstar> obs_hybridastar_path_finder_;
     plan_utils::KinoTrajData kino_trajs_;
     // void getKinoPath(Eigen::Vector4d &end_state);
     bool enable_urban_ = false;

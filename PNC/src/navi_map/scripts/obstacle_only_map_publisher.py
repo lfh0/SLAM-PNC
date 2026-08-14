@@ -127,13 +127,14 @@ def build_obstacle_only_grid(config):
 
 def main():
     rospy.init_node("obstacle_only_map_publisher")
-    topic = rospy.get_param("~topic", "/map")
     publish_rate = float(rospy.get_param("~publish_rate", 1.0))
     latch = bool(rospy.get_param("~latch", True))
 
     config = load_map_config()
     grid = build_obstacle_only_grid(config)
-    pub = rospy.Publisher(topic, OccupancyGrid, queue_size=1, latch=latch)
+    # 输出话题固定，仅输入话题允许由 launch 动态配置。
+    topic = "/map"
+    pub = rospy.Publisher("/map", OccupancyGrid, queue_size=1, latch=latch)
 
     rospy.loginfo(
         "发布障碍物地图: image=%s topic=%s size=%dx%d resolution=%.3f",

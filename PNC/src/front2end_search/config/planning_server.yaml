@@ -1,0 +1,5 @@
+planner:
+  # 0：全部搜索，1：A*，2：混合 A*，3：JPS，4：RRT
+  search_type: 1
+  # 路径第一个点 yaw 的前视距离
+  path_yaw_lookahead_distance: 0.3

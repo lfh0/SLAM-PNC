@@ -117,6 +117,9 @@ private:
     double search_window_margin_;
     Eigen::Vector2i search_min_idx_, search_max_idx_;
     double tie_breaker_ = 1.0 + 1.0 / 10000; 
+    bool yaw_prefix_enabled_;
+    bool yaw_prefix_strict_;
+    int yaw_prefix_points_;
 
     bool isInMap2d(const Eigen::Vector2d &pos);
     bool isInMap2d(const Eigen::Vector2i &id);
@@ -129,6 +132,10 @@ private:
 
     void retrievePath(AstarNodePtr end_node);
     void ConvertNodePathToPointPath(vector<AstarNodePtr> path_nodes_);
+    bool buildYawPrefix(const Eigen::Vector2d& start_pos,
+                        double start_yaw,
+                        std::vector<Eigen::Vector2d>& prefix,
+                        Eigen::Vector2d& search_start);
 
     inline double getHeu(Eigen::Vector2d x1, Eigen::Vector2d x2)
     {
@@ -150,8 +157,9 @@ public:
 	    void setSearchWindowMargin(double margin) { search_window_margin_ = margin; }
 
     int search(Eigen::Vector2d& start_pos, Eigen::Vector2d& goal_pos);
+    int search(Eigen::Vector2d& start_pos, Eigen::Vector2d& goal_pos, double start_yaw);
 
-	    vector<Eigen::Vector2d> getKinoPath(){return final_path_;}
+	    vector<Eigen::Vector2d> getPath(){return final_path_;}
 	    typedef shared_ptr<Astar> Ptr;
 };
 }

@@ -17,6 +17,7 @@
 
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>decomp_ros_utils</build_depend>
+  <depend>robot_trajectory_msgs</depend>
   <depend>controller</depend>
   <depend>visualization_msgs</depend>
   <exec_depend>decomp_ros_utils</exec_depend>

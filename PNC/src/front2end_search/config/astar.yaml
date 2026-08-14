@@ -1,0 +1,20 @@
+astar:
+  lambda_heu: 1.0001
+  allocate_num: 3000000
+  max_search_time: 50000.0
+
+  # 99～100 为硬碰撞区，1～98 作为可通行的软膨胀代价区
+  occupied_threshold: 80
+  obstacle_cost_weight: 5.0
+  unknown_as_occupied: true
+
+  use_search_window: true
+  search_window_margin: 20.0
+  search_window_retry_margins: [20.0, 50.0, 100.0]
+
+  # 起步阶段先沿当前 yaw 生成固定前缀，再从前缀末端开始 A* 启发搜索
+  yaw_prefix:
+    enabled: true
+    points: 20
+    # true 表示前缀无法完整生成时直接搜索失败；false 表示使用可生成的部分前缀继续搜索
+    strict: false

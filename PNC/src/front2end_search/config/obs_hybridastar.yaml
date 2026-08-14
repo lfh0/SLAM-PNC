@@ -1,0 +1,33 @@
+obs_hybridastar:
+  horizon: 50.0
+  yaw_resolution: 0.3
+  lambda_heu: 1.0001
+  allocate_num: 3000000
+  check_num: 5
+  max_search_time: 50000.0
+
+  occupied_threshold: 80
+  obstacle_cost_weight: 5.0
+  unknown_as_occupied: true
+
+  traj_forward_penalty: 1.0
+  traj_back_penalty: 5.0
+  traj_gear_switch_penalty: 0.0
+  traj_steer_penalty: 0.2
+  traj_steer_change_penalty: 0.0
+  step_arc: 1.0
+  checkl: 0.2
+
+  max_vel: 0.5
+  max_acc: 0.3
+  max_cur: 0.3
+  time_resolution: 0.1
+  distance_resolution: 0.5
+  velocity_resolution: 0.5
+
+  vehicle:
+    car_length: 1.0
+    car_width: 0.6
+    car_wheelbase: 0.8
+    car_max_steering_angle: 45.0
+    car_d_cr: 0.0

@@ -3,11 +3,12 @@
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseArray.h>
+#include <robot_trajectory_msgs/RobotTrajectory.h>
+#include <robot_trajectory_msgs/RobotTrajectoryPoint.h>
 #include <ros/package.h>
 #include <tf/transform_datatypes.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
-#include <trajopt/SendPath.h>
 #include <Eigen/Eigen>
 #include <eigen3/Eigen/Dense> 
 #include <Eigen/Core>
@@ -17,7 +18,9 @@
 #include <trajopt/Trajectory.h>
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <functional>
+#include <string>
 
 #include "plan_manage/traj_optimizer.h"
 #include "decomp_util/ellipsoid_decomp.h"
@@ -26,6 +29,65 @@
 
 #include "Utility.h"
 #include "smoother.hpp"
+
+namespace
+{
+constexpr double kBoundaryYawSpeed = 1.0e-2;
+
+double normalizeYawDiff(const double yaw_a, const double yaw_b)
+{
+    return std::atan2(std::sin(yaw_a - yaw_b), std::cos(yaw_a - yaw_b));
+}
+
+bool computePathTangentYaw(const nav_msgs::Path& path,
+                           const bool from_start,
+                           const double lookahead_distance,
+                           double& yaw)
+{
+    if (path.poses.size() < 2) {
+        return false;
+    }
+
+    const auto point = [&path](const size_t index) {
+        return Eigen::Vector2d(path.poses[index].pose.position.x,
+                               path.poses[index].pose.position.y);
+    };
+    const double min_distance = std::max(lookahead_distance, 1.0e-3);
+
+    if (from_start) {
+        const Eigen::Vector2d start = point(0);
+        Eigen::Vector2d candidate = point(1);
+        for (size_t i = 1; i < path.poses.size(); ++i) {
+            candidate = point(i);
+            if ((candidate - start).norm() >= min_distance) {
+                break;
+            }
+        }
+        const Eigen::Vector2d direction = candidate - start;
+        if (direction.squaredNorm() <= 1.0e-10) {
+            return false;
+        }
+        yaw = std::atan2(direction.y(), direction.x());
+        return true;
+    }
+
+    const size_t last = path.poses.size() - 1;
+    const Eigen::Vector2d finish = point(last);
+    Eigen::Vector2d candidate = point(last - 1);
+    for (size_t offset = 1; offset <= last; ++offset) {
+        candidate = point(last - offset);
+        if ((finish - candidate).norm() >= min_distance) {
+            break;
+        }
+    }
+    const Eigen::Vector2d direction = finish - candidate;
+    if (direction.squaredNorm() <= 1.0e-10) {
+        return false;
+    }
+    yaw = std::atan2(direction.y(), direction.x());
+    return true;
+}
+}
 
 
 class TrajoptServer
@@ -45,10 +107,9 @@ private:
 
     ros::Publisher midpointshowPub_;
 
-    ros::ServiceClient path_send_client_;
-
     nav_msgs::OccupancyGrid globalMap_;
     RobotState robot_state_;
+    bool has_odom_ = false;
 
     // 前端搜索直接输出的路径
     nav_msgs::Path path_nodes;
@@ -56,6 +117,8 @@ private:
     std::vector<Eigen::MatrixXd> hPolys_;
     plan_manage::PolyTrajOptimizer::Ptr ploy_traj_opt_;
     plan_utils::TrajContainer traj_container_;
+    ros::WallTime active_path_wall_start_;
+    uint64_t trajopt_seq_ = 0;
 
     int corridor_collision_threshold_;
     bool corridor_unknown_as_occupied_;
@@ -71,12 +134,12 @@ private:
     double initial_min_speed_;
     double initial_min_piece_time_;
     double initial_min_turn_speed_ratio_;
-    double validation_max_curvature_;
-    double validation_sample_period_;
-    double validation_corridor_tolerance_;
-    double validation_car_length_;
-    double validation_car_width_;
-    double validation_car_d_cr_;
+    bool consider_start_yaw_;
+    bool consider_end_yaw_;
+    std::string start_yaw_source_;
+    std::string end_yaw_source_;
+    double boundary_yaw_lookahead_distance_;
+    double boundary_max_yaw_mismatch_;
 
 private:
     void globalMapCallBack(const nav_msgs::OccupancyGrid::ConstPtr &msg);
@@ -86,14 +149,15 @@ private:
     bool generateSafeCorridor(const nav_msgs::Path& path,
                               std::vector<Eigen::Vector3d>& key_points);
     bool checkCollisionUsingLine(const Eigen::Vector2d& start_pt, const Eigen::Vector2d& end_pt) const;
-    bool validateTrajectory(const plan_utils::Trajectory& trajectory) const;
+    static double elapsedMs(const ros::WallTime& start_time);
+    double elapsedFromActivePathMs() const;
 
 
 public:
     explicit TrajoptServer(ros::NodeHandle nh);
     bool RunMINCOParking();
-    void displayMincoTraj(plan_utils::SingulTrajData display_traj,
-                          bool publish_to_controller = true);
+    void displayMincoTraj(const plan_utils::SingulTrajData& display_traj,
+                          double path_end_yaw);
     void displayPathEndpoints(const nav_msgs::Path& path);
     void displayPolyH(const std::vector<Eigen::MatrixXd> hPolys);
     void displayPoint(const std::vector<Eigen::Vector3d>& points);
@@ -117,39 +181,39 @@ TrajoptServer::TrajoptServer(ros::NodeHandle nh)
     nh_.param("initial_time/min_speed", initial_min_speed_, 0.2);
     nh_.param("initial_time/min_piece_time", initial_min_piece_time_, 0.2);
     nh_.param("initial_time/min_turn_speed_ratio", initial_min_turn_speed_ratio_, 0.25);
-    nh_.param("optimizing/max_cur", validation_max_curvature_, 0.523598);
-    nh_.param("validation/sample_period", validation_sample_period_, 0.02);
-    nh_.param("validation/corridor_tolerance", validation_corridor_tolerance_, 1.0e-4);
-    nh_.param("vehicle/car_length", validation_car_length_, 0.6);
-    nh_.param("vehicle/car_width", validation_car_width_, 0.6);
-    nh_.param("vehicle/car_d_cr", validation_car_d_cr_, 0.0);
-    double validation_half_margin = 0.25;
-    nh_.param("optimizing/half_margin", validation_half_margin, 0.25);
-    validation_car_length_ += 2.0 * validation_half_margin;
-    validation_car_width_ += 2.0 * validation_half_margin;
+    nh_.param("boundary/consider_start_yaw", consider_start_yaw_, true);
+    nh_.param("boundary/consider_end_yaw", consider_end_yaw_, true);
+    nh_.param<std::string>("boundary/start_yaw_source", start_yaw_source_, "path");
+    nh_.param<std::string>("boundary/end_yaw_source", end_yaw_source_, "path");
+    nh_.param("boundary/path_yaw_lookahead_distance", boundary_yaw_lookahead_distance_, 0.5);
+    nh_.param("boundary/max_yaw_mismatch", boundary_max_yaw_mismatch_, 1.0472);
+
+    ROS_INFO("MINCO边界朝向约束：起点=%s(%s)，终点=%s(%s)，前视距离=%.3f m，最大偏差=%.3f rad，约束速度=%.3f m/s",
+             consider_start_yaw_ ? "开启" : "关闭",
+             start_yaw_source_.c_str(),
+             consider_end_yaw_ ? "开启" : "关闭",
+             end_yaw_source_.c_str(),
+             boundary_yaw_lookahead_distance_,
+             boundary_max_yaw_mismatch_,
+             kBoundaryYawSpeed);
     
     
     std::string global_map_topic;
     std::string odom_topic;
     std::string path_topic;
-    std::string debug_path_topic;
-    std::string path_endpoints_topic;
-    nh_.param<std::string>("topics/global_map", global_map_topic, "/global_costmap_node/costmap/costmap");
-    nh_.param<std::string>("topics/odom", odom_topic, "/lio/odom");
-    nh_.param<std::string>("topics/path", path_topic, "/front2end_search_path");
-    nh_.param<std::string>("topics/debug_path", debug_path_topic, "/trajopt/debug_path");
-    nh_.param<std::string>("topics/path_endpoints", path_endpoints_topic,
-                           "/trajopt/path_endpoints");
+    ros::NodeHandle private_nh("~");
+    private_nh.param<std::string>("topics/global_map", global_map_topic, "/global_costmap_node/costmap/costmap");
+    private_nh.param<std::string>("topics/odom", odom_topic, "/lio/odom");
+    private_nh.param<std::string>("topics/path", path_topic, "/front2end_search_path");
     
     globalMapSub_ = nh_.subscribe<nav_msgs::OccupancyGrid>(global_map_topic, 10, &TrajoptServer::globalMapCallBack, this);
     odomSub_ = nh_.subscribe<nav_msgs::Odometry>(odom_topic, 10, &TrajoptServer::odomCallBack, this);
     pathSub_ = nh_.subscribe<nav_msgs::Path>(path_topic, 10, &TrajoptServer::pathCallBack, this);
     
-    path_send_client_ = nh_.serviceClient<trajopt::SendPath>("/trajopt/server/global_traj_path");
-    minco_traj_pub_ = nh_.advertise<nav_msgs::Path>("/trajopt/minco_traj", 2);
-    debug_traj_pub_ = nh_.advertise<nav_msgs::Path>(debug_path_topic, 1, true);
+    minco_traj_pub_ = nh_.advertise<robot_trajectory_msgs::RobotTrajectory>("/trajopt/minco_traj", 2);
+    debug_traj_pub_ = nh_.advertise<nav_msgs::Path>("/trajopt/debug_path", 1, true);
     path_endpoints_pub_ = nh_.advertise<visualization_msgs::MarkerArray>(
-        path_endpoints_topic, 1, true);
+        "/trajopt/path_endpoints", 1, true);
     Rectangle_poly_pub_ = nh_.advertise<decomp_ros_msgs::PolyhedronArray>("/trajopt/polyhedrons", 1, true);
     midpointshowPub_ = nh_.advertise<visualization_msgs::MarkerArray>("/trajopt/corridor_points", 1, true);
 
@@ -169,17 +233,42 @@ void TrajoptServer::odomCallBack(const nav_msgs::OdometryConstPtr &msg){
     robot_state_.yaw = tf::getYaw(msg->pose.pose.orientation);
     robot_state_.linear_velocity = msg->twist.twist.linear.x;
     robot_state_.angular_velocity = msg->twist.twist.angular.z;
+    has_odom_ = true;
+}
+
+double TrajoptServer::elapsedMs(const ros::WallTime& start_time)
+{
+    return (ros::WallTime::now() - start_time).toSec() * 1000.0;
+}
+
+double TrajoptServer::elapsedFromActivePathMs() const
+{
+    if (active_path_wall_start_.isZero()) {
+        return 0.0;
+    }
+    return (ros::WallTime::now() - active_path_wall_start_).toSec() * 1000.0;
 }
 
 void TrajoptServer::pathCallBack(const nav_msgs::Path::ConstPtr &msg){
+    active_path_wall_start_ = ros::WallTime::now();
+    const uint64_t seq = ++trajopt_seq_;
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] front_path_received stamp=%.6f path_points=%zu",
+             static_cast<unsigned long>(seq), msg->header.stamp.toSec(), msg->poses.size());
     if (msg->poses.size() < 2) {
         ROS_WARN("收到的全局路径点数不足，跳过轨迹优化");
         return;
     }
+    const ros::WallTime copy_start = ros::WallTime::now();
     path_nodes = *msg;
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] path_copy_ms=%.3f",
+             static_cast<unsigned long>(seq), elapsedMs(copy_start));
     if (!RunMINCOParking()) {
+        ROS_WARN("[planner_timing][trajopt][seq=%lu] trajopt_failed path_to_return_ms=%.3f",
+                 static_cast<unsigned long>(seq), elapsedFromActivePathMs());
         return;
     }
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] path_to_return_ms=%.3f",
+             static_cast<unsigned long>(seq), elapsedFromActivePathMs());
 }
 
 void TrajoptServer::displayPoint(const std::vector<Eigen::Vector3d>& points)
@@ -234,14 +323,34 @@ void TrajoptServer::displayPolyH(const std::vector<Eigen::MatrixXd> hPolys)
     Rectangle_poly_pub_.publish(poly_msg);
 }
 
-void TrajoptServer::displayMincoTraj(plan_utils::SingulTrajData display_traj,
-                                     bool publish_to_controller)
+void TrajoptServer::displayMincoTraj(
+    const plan_utils::SingulTrajData& display_traj,
+    const double path_end_yaw)
 {
+    const ros::WallTime build_start = ros::WallTime::now();
     nav_msgs::Path path_msg;
     path_msg.header.frame_id = "map";
     path_msg.header.stamp = ros::Time::now();
+    robot_trajectory_msgs::RobotTrajectory trajectory_msg;
+    trajectory_msg.header = path_msg.header;
     constexpr double sample_period = 0.01;
     constexpr double velocity_epsilon = 1.0e-6;
+    constexpr double jerk_sample_period = 1.0e-3;
+    double trajectory_time = 0.0;
+    double arc_length = 0.0;
+    bool has_previous_pt = false;
+    Eigen::Vector2d previous_pt(0.0, 0.0);
+
+    const auto calc_longitudinal_acceleration =
+        [](const plan_utils::Trajectory& trajectory, const double t) {
+            const Eigen::Vector2d velocity = trajectory.getdSigma(t);
+            const Eigen::Vector2d acceleration = trajectory.getddSigma(t);
+            const double speed = velocity.norm();
+            if (speed <= 1.0e-6) {
+                return 0.0;
+            }
+            return acceleration.dot(velocity) / speed;
+        };
 
     for (unsigned int i = 0; i < display_traj.size(); ++i)
     {
@@ -256,7 +365,11 @@ void TrajoptServer::displayMincoTraj(plan_utils::SingulTrajData display_traj,
             const double t = std::min(
                 total_duration, sample_index * sample_period);
             const Eigen::Vector2d pt = trajectory.getPos(t);
-            Eigen::Vector2d tangent = direction * trajectory.getdSigma(t);
+            const Eigen::Vector2d raw_velocity = trajectory.getdSigma(t);
+            const Eigen::Vector2d raw_acceleration = trajectory.getddSigma(t);
+            const Eigen::Vector2d velocity = direction * raw_velocity;
+            const Eigen::Vector2d acceleration = direction * raw_acceleration;
+            Eigen::Vector2d tangent = velocity;
 
             // 起终点速度为零时，用邻近轨迹位置计算真实切线，避免使用坐标原点计算 yaw。
             if (tangent.squaredNorm() <= velocity_epsilon * velocity_epsilon) {
@@ -274,22 +387,76 @@ void TrajoptServer::displayMincoTraj(plan_utils::SingulTrajData display_traj,
             const double yaw = std::atan2(tangent.y(), tangent.x());
             pose.pose.orientation = tf::createQuaternionMsgFromYaw(yaw);
             path_msg.poses.push_back(pose);
-        }
-    }
-    // 候选轨迹生成后先发布首尾位姿，便于观察验收失败轨迹的边界状态。
-    displayPathEndpoints(path_msg);
-    if (!publish_to_controller) {
-        debug_traj_pub_.publish(path_msg);
-        return;
-    }
-    minco_traj_pub_.publish(path_msg);
 
-    trajopt::SendPath sendpath;
-    sendpath.request.path = path_msg;
-    sendpath.request.path.header.frame_id = "map";
-    if(!path_send_client_.call(sendpath)){
-        path_send_client_.call(sendpath);
+            if (has_previous_pt) {
+                arc_length += (pt - previous_pt).norm();
+            }
+            previous_pt = pt;
+            has_previous_pt = true;
+
+            const double speed = raw_velocity.norm();
+            const double curvature = speed > 1.0e-6
+                ? (raw_velocity.x() * raw_acceleration.y()
+                   - raw_velocity.y() * raw_acceleration.x())
+                    / std::pow(speed, 3)
+                : 0.0;
+            const double prev_t = std::max(0.0, t - jerk_sample_period);
+            const double next_t = std::min(total_duration, t + jerk_sample_period);
+            const double jerk_dt = next_t - prev_t;
+            const double longitudinal_jerk = jerk_dt > 1.0e-9
+                ? (calc_longitudinal_acceleration(trajectory, next_t)
+                   - calc_longitudinal_acceleration(trajectory, prev_t)) / jerk_dt
+                : 0.0;
+
+            robot_trajectory_msgs::RobotTrajectoryPoint trajectory_point;
+            trajectory_point.time_from_start = ros::Duration(trajectory_time + t);
+            trajectory_point.sampling_interval = sample_period;
+            trajectory_point.pose = pose.pose;
+            trajectory_point.velocity.linear.x = velocity.x();
+            trajectory_point.velocity.linear.y = velocity.y();
+            trajectory_point.velocity.linear.z = 0.0;
+            trajectory_point.velocity.angular.z = velocity.norm() * curvature;
+            trajectory_point.acceleration.linear.x = acceleration.x();
+            trajectory_point.acceleration.linear.y = acceleration.y();
+            trajectory_point.acceleration.linear.z = 0.0;
+            trajectory_point.curvature = curvature;
+            trajectory_point.longitudinal_jerk = longitudinal_jerk;
+            trajectory_point.arc_length = arc_length;
+            trajectory_msg.points.push_back(trajectory_point);
+        }
+        trajectory_time += total_duration;
     }
+
+    if (!path_msg.poses.empty() && !trajectory_msg.points.empty()) {
+        const double trajectory_end_yaw =
+            tf::getYaw(path_msg.poses.back().pose.orientation);
+        const double published_end_yaw = consider_end_yaw_
+            ? trajectory_end_yaw : path_end_yaw;
+        const geometry_msgs::Quaternion end_orientation =
+            tf::createQuaternionMsgFromYaw(published_end_yaw);
+        path_msg.poses.back().pose.orientation = end_orientation;
+        trajectory_msg.points.back().pose.orientation = end_orientation;
+    }
+    const double build_ms = elapsedMs(build_start);
+
+    const ros::WallTime endpoint_start = ros::WallTime::now();
+    // 发布首尾位姿，便于观察最终轨迹边界状态。
+    displayPathEndpoints(path_msg);
+    const double endpoint_ms = elapsedMs(endpoint_start);
+
+    const ros::WallTime debug_publish_start = ros::WallTime::now();
+    debug_traj_pub_.publish(path_msg);
+    const double debug_publish_ms = elapsedMs(debug_publish_start);
+
+    const ros::WallTime traj_publish_start = ros::WallTime::now();
+    minco_traj_pub_.publish(trajectory_msg);
+    const double traj_publish_ms = elapsedMs(traj_publish_start);
+
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] sample_build_ms=%.3f endpoint_marker_ms=%.3f debug_path_publish_call_ms=%.3f final_traj_publish_call_ms=%.3f path_to_final_publish_ms=%.3f path_points=%zu traj_points=%zu duration=%.3f arc_length=%.3f",
+             static_cast<unsigned long>(trajopt_seq_), build_ms, endpoint_ms,
+             debug_publish_ms, traj_publish_ms, elapsedFromActivePathMs(),
+             path_msg.poses.size(), trajectory_msg.points.size(),
+             trajectory_time, arc_length);
 }
 
 void TrajoptServer::displayPathEndpoints(const nav_msgs::Path& path)
@@ -331,6 +498,7 @@ void TrajoptServer::displayPathEndpoints(const nav_msgs::Path& path)
 bool TrajoptServer::checkCollisionUsingLine(const Eigen::Vector2d& start_pt,
                                             const Eigen::Vector2d& end_pt) const
 {
+
     const auto& info = globalMap_.info;
     if (info.resolution <= 0.0 || info.width == 0 || info.height == 0 || globalMap_.data.empty()) {
         return true;
@@ -365,98 +533,6 @@ bool TrajoptServer::checkCollisionUsingLine(const Eigen::Vector2d& start_pt,
         }
     }
     return false;
-}
-
-bool TrajoptServer::validateTrajectory(const plan_utils::Trajectory& trajectory) const
-{
-    if (trajectory.getPieceNum() != static_cast<int>(hPolys_.size())
-        || validation_sample_period_ <= 0.0) {
-        ROS_ERROR("轨迹段数与安全走廊数量不一致，无法验收");
-        return false;
-    }
-
-    double max_velocity = 0.0;
-    double max_acceleration = 0.0;
-    double max_curvature = 0.0;
-    for (int piece_index = 0; piece_index < trajectory.getPieceNum(); ++piece_index) {
-        const auto& piece = trajectory[piece_index];
-        const double duration = piece.getDuration();
-        const size_t sample_count = static_cast<size_t>(
-            std::ceil(duration / validation_sample_period_));
-
-        for (size_t sample_index = 0; sample_index <= sample_count; ++sample_index) {
-            const double t = std::min(
-                duration, sample_index * validation_sample_period_);
-            const Eigen::Vector2d position = piece.getPos(t);
-            const Eigen::Vector2d velocity = piece.getdSigma(t);
-            const Eigen::Vector2d acceleration = piece.getddSigma(t);
-            if (!position.allFinite() || !velocity.allFinite() || !acceleration.allFinite()) {
-                ROS_ERROR("轨迹第 %d 段出现非有限数值", piece_index);
-                return false;
-            }
-
-            const double speed = velocity.norm();
-            const double tangential_acceleration = speed > 1.0e-6
-                ? std::abs(acceleration.dot(velocity) / speed) : 0.0;
-            const double curvature = speed > 1.0e-4
-                ? std::abs(velocity.x() * acceleration.y()
-                           - velocity.y() * acceleration.x())
-                    / (speed * speed * speed)
-                : 0.0;
-            max_velocity = std::max(max_velocity, speed);
-            max_acceleration = std::max(max_acceleration, tangential_acceleration);
-            max_curvature = std::max(max_curvature, curvature);
-            if (speed > initial_max_vel_ + 1.0e-3
-                || tangential_acceleration > initial_max_acc_ + 1.0e-3
-                || curvature > validation_max_curvature_ + 1.0e-3) {
-                ROS_ERROR("轨迹动力学验收失败：段=%d, t=%.3f, v=%.3f, a=%.3f, k=%.3f",
-                          piece_index, t, speed, tangential_acceleration, curvature);
-                return false;
-            }
-
-            Eigen::Vector2d tangent = velocity;
-            if (tangent.squaredNorm() <= 1.0e-12) {
-                const double previous_t = std::max(0.0, t - validation_sample_period_);
-                const double next_t = std::min(duration, t + validation_sample_period_);
-                tangent = piece.getPos(next_t) - piece.getPos(previous_t);
-            }
-            if (tangent.squaredNorm() <= 1.0e-12) {
-                ROS_ERROR("轨迹第 %d 段在 t=%.3f 无法确定车身方向", piece_index, t);
-                return false;
-            }
-            tangent.normalize();
-            tangent *= trajectory.getDirection();
-            const Eigen::Vector2d normal(-tangent.y(), tangent.x());
-            const std::array<Eigen::Vector2d, 4> corners{
-                position + (validation_car_d_cr_ + 0.5 * validation_car_length_) * tangent
-                         + 0.5 * validation_car_width_ * normal,
-                position + (validation_car_d_cr_ + 0.5 * validation_car_length_) * tangent
-                         - 0.5 * validation_car_width_ * normal,
-                position + (validation_car_d_cr_ - 0.5 * validation_car_length_) * tangent
-                         - 0.5 * validation_car_width_ * normal,
-                position + (validation_car_d_cr_ - 0.5 * validation_car_length_) * tangent
-                         + 0.5 * validation_car_width_ * normal};
-
-            const Eigen::MatrixXd& corridor = hPolys_[piece_index];
-            for (const auto& corner : corners) {
-                for (int plane_index = 0; plane_index < corridor.cols(); ++plane_index) {
-                    const Eigen::Vector2d normal_vector = corridor.col(plane_index).head<2>();
-                    const Eigen::Vector2d plane_point = corridor.col(plane_index).tail<2>();
-                    const double signed_distance = normal_vector.dot(corner - plane_point)
-                        / normal_vector.norm();
-                    if (signed_distance > validation_corridor_tolerance_) {
-                        ROS_ERROR("轨迹走廊验收失败：段=%d, t=%.3f, 越界=%.4fm",
-                                  piece_index, t, signed_distance);
-                        return false;
-                    }
-                }
-            }
-        }
-    }
-
-    ROS_INFO("轨迹验收通过：max_v=%.3f, max_a=%.3f, max_k=%.3f",
-             max_velocity, max_acceleration, max_curvature);
-    return true;
 }
 
 bool TrajoptServer::generateSafeCorridor(const nav_msgs::Path& path,
@@ -541,8 +617,18 @@ bool TrajoptServer::generateSafeCorridor(const nav_msgs::Path& path,
         }
 
         size_t split = deviation.second;
-        if (split <= begin || split >= end) {
+        const auto split_is_too_close = [&](const size_t index) {
+            return index <= begin || index >= end
+                || arc_length(begin, index) < corridor_min_seed_length_
+                || arc_length(index, end) < corridor_min_seed_length_;
+        };
+        if (split_is_too_close(split)) {
             split = arc_midpoint(begin, end);
+        }
+        if (split_is_too_close(split)) {
+            ROS_ERROR("路径区间 [%zu, %zu] 需要拆分，但无法满足最小段长 %.3fm",
+                      begin, end, corridor_min_seed_length_);
+            return false;
         }
         return refine_segment(begin, split) && refine_segment(split, end);
     };
@@ -577,6 +663,18 @@ bool TrajoptServer::generateSafeCorridor(const nav_msgs::Path& path,
                 merged = true;
                 break;
             }
+        }
+    }
+
+    // min_seed_length 是进入 MINCO 前的硬约束。无法安全合并的短段宁可终止
+    // 本次优化，也不能生成接近零长度的多项式段，否则曲率和时间梯度会病态。
+    for (size_t i = 0; i + 1 < refined_indices.size(); ++i) {
+        const double segment_length =
+            (path_point(refined_indices[i + 1]) - path_point(refined_indices[i])).norm();
+        if (segment_length < corridor_min_seed_length_) {
+            ROS_ERROR("关键点 %zu 和 %zu 距离过近：%.6fm < %.6fm，停止轨迹优化",
+                      i, i + 1, segment_length, corridor_min_seed_length_);
+            return false;
         }
     }
 
@@ -712,14 +810,29 @@ bool TrajoptServer::generateSafeCorridor(const nav_msgs::Path& path,
 
 bool TrajoptServer::RunMINCOParking()
 {
+    const ros::WallTime total_start = ros::WallTime::now();
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] minco_pipeline_start input_path_points=%zu",
+             static_cast<unsigned long>(trajopt_seq_), path_nodes.poses.size());
+
     std::vector<Eigen::Vector3d> key_points;
+    const ros::WallTime corridor_start = ros::WallTime::now();
     if (!generateSafeCorridor(path_nodes, key_points)) {
         ROS_ERROR("安全走廊生成失败，停止本次轨迹优化");
+        ROS_WARN("[planner_timing][trajopt][seq=%lu] corridor_failed corridor_ms=%.3f path_to_now_ms=%.3f",
+                 static_cast<unsigned long>(trajopt_seq_),
+                 elapsedMs(corridor_start), elapsedFromActivePathMs());
         return false;
     }
+    const double corridor_ms = elapsedMs(corridor_start);
+
+    const ros::WallTime visualize_start = ros::WallTime::now();
     displayPoint(key_points);
     displayPolyH(hPolys_);
+    const double visualize_ms = elapsedMs(visualize_start);
     ROS_INFO("安全走廊生成成功：%zu 个关键点，%zu 个凸区域",
+             key_points.size(), hPolys_.size());
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] corridor_ms=%.3f corridor_visualize_ms=%.3f key_points=%zu hpolys=%zu",
+             static_cast<unsigned long>(trajopt_seq_), corridor_ms, visualize_ms,
              key_points.size(), hPolys_.size());
 
     // 选择多段多项式的端点作为关键点：
@@ -736,29 +849,104 @@ bool TrajoptServer::RunMINCOParking()
     const size_t piece_num = hPolys_.size();
     if (key_points.size() != piece_num + 1 || piece_num < 2) {
         ROS_ERROR("MINCO 输入数量不匹配或多项式段数不足");
+        ROS_WARN("[planner_timing][trajopt][seq=%lu] input_invalid path_to_now_ms=%.3f",
+                 static_cast<unsigned long>(trajopt_seq_), elapsedFromActivePathMs());
+        return false;
+    }
+    if ((consider_start_yaw_ || consider_end_yaw_)
+        && (!std::isfinite(initial_max_vel_)
+            || initial_max_vel_ <= kBoundaryYawSpeed)) {
+        ROS_ERROR("启用边界朝向约束时 optimizing/max_vel 必须大于 %.3f m/s",
+                  kBoundaryYawSpeed);
+        return false;
+    }
+    if (consider_start_yaw_ && start_yaw_source_ == "odom" && !has_odom_) {
+        ROS_ERROR("启用起点朝向约束时必须先收到里程计，停止本次轨迹优化");
         return false;
     }
 
-    // 起点使用车辆当前速度，终点默认停车；加速度初值均设为零。
+    const ros::WallTime input_start = ros::WallTime::now();
+    const double odom_start_yaw = robot_state_.yaw;
+    const double goal_end_yaw =
+        tf::getYaw(path_nodes.poses.back().pose.orientation);
+    double path_start_yaw = odom_start_yaw;
+    double path_end_yaw = goal_end_yaw;
+    const bool has_path_start_yaw = computePathTangentYaw(
+        path_nodes, true, boundary_yaw_lookahead_distance_, path_start_yaw);
+    const bool has_path_end_yaw = computePathTangentYaw(
+        path_nodes, false, boundary_yaw_lookahead_distance_, path_end_yaw);
+
+    auto select_yaw = [&](const std::string& source,
+                          const bool is_start,
+                          const double primary_yaw,
+                          const double path_yaw,
+                          const bool has_path_yaw) {
+        double selected_yaw = primary_yaw;
+        if (source == "path") {
+            if (has_path_yaw) {
+                selected_yaw = path_yaw;
+            } else {
+                ROS_WARN("无法从前端路径计算%s yaw，回退到%s yaw",
+                         is_start ? "起点" : "终点",
+                         is_start ? "odom" : "goal");
+            }
+        } else if (source == "odom" || source == "goal") {
+            if (has_path_yaw
+                && std::abs(normalizeYawDiff(primary_yaw, path_yaw))
+                    > boundary_max_yaw_mismatch_) {
+                ROS_WARN("%s yaw 与前端路径切向偏差过大：source=%.3f path=%.3f，回退到路径切向",
+                         is_start ? "起点" : "终点",
+                         primary_yaw, path_yaw);
+                selected_yaw = path_yaw;
+            }
+        } else {
+            ROS_WARN("未知的 %s_yaw_source=%s，使用前端路径切向",
+                     is_start ? "start" : "end", source.c_str());
+            if (has_path_yaw) {
+                selected_yaw = path_yaw;
+            }
+        }
+        return selected_yaw;
+    };
+
+    const double start_yaw = select_yaw(
+        start_yaw_source_, true, odom_start_yaw, path_start_yaw,
+        has_path_start_yaw);
+    const double end_yaw = select_yaw(
+        end_yaw_source_, false, goal_end_yaw, path_end_yaw,
+        has_path_end_yaw);
+    if ((consider_start_yaw_ && !std::isfinite(start_yaw))
+        || (consider_end_yaw_ && !std::isfinite(end_yaw))) {
+        ROS_ERROR("起点或终点 yaw 不是有限数值，停止本次轨迹优化");
+        return false;
+    }
+
+    // 非零微小速度只用于给 P/V/A 边界编码朝向，不代表期望行驶速度。
     Eigen::MatrixXd initial_state = Eigen::MatrixXd::Zero(2, 3);
     Eigen::MatrixXd final_state = Eigen::MatrixXd::Zero(2, 3);
     initial_state.col(0) = key_points.front().head<2>();
     final_state.col(0) = key_points.back().head<2>();
-    const double start_speed = std::min(
-        initial_max_vel_, std::max(0.0, robot_state_.linear_velocity));
-    initial_state.col(1) << start_speed * std::cos(key_points.front().z()),
-                            start_speed * std::sin(key_points.front().z());
+    if (consider_start_yaw_) {
+        initial_state.col(1) = kBoundaryYawSpeed
+            * Eigen::Vector2d(std::cos(start_yaw), std::sin(start_yaw));
+    }
+    if (consider_end_yaw_) {
+        final_state.col(1) = kBoundaryYawSpeed
+            * Eigen::Vector2d(std::cos(end_yaw), std::sin(end_yaw));
+    }
+    const double start_boundary_speed = initial_state.col(1).norm();
+    const double end_boundary_speed = final_state.col(1).norm();
 
     Eigen::MatrixXd inner_points(2, piece_num - 1);
     for (size_t i = 1; i + 1 < key_points.size(); ++i) {
         inner_points.col(i - 1) = key_points[i].head<2>();
     }
 
-    // 转角越大，连接点速度越低；首点使用当前速度，末点速度为零。
+    // 转角越大，连接点速度越低；首尾节点速度与 P/V/A 边界保持一致。
     Eigen::VectorXd node_speeds = Eigen::VectorXd::Constant(
         key_points.size(), initial_max_vel_);
-    node_speeds[0] = start_speed;
-    node_speeds[node_speeds.size() - 1] = 0.0;
+    node_speeds[0] = start_boundary_speed;
+    node_speeds[node_speeds.size() - 1] = end_boundary_speed;
     for (size_t i = 1; i + 1 < key_points.size(); ++i) {
         const Eigen::Vector2d incoming =
             key_points[i].head<2>() - key_points[i - 1].head<2>();
@@ -786,6 +974,12 @@ bool TrajoptServer::RunMINCOParking()
     }
     const double total_time = piece_times.sum();
     const Eigen::VectorXd piece_time_ratios = piece_times / total_time;
+    const double input_ms = elapsedMs(input_start);
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] minco_input_ms=%.3f piece_num=%zu initial_total_time=%.3f consider_start_yaw=%d start_yaw=%.3f start_path_yaw=%.3f start_boundary_speed=%.3f consider_end_yaw=%d end_yaw=%.3f end_path_yaw=%.3f end_boundary_speed=%.3f",
+             static_cast<unsigned long>(trajopt_seq_), input_ms, piece_num,
+             total_time, consider_start_yaw_, start_yaw, start_boundary_speed,
+             path_start_yaw, consider_end_yaw_, end_yaw, path_end_yaw,
+             end_boundary_speed);
 
     std::vector<Eigen::MatrixXd> initial_states{initial_state};
     std::vector<Eigen::MatrixXd> final_states{final_state};
@@ -796,6 +990,7 @@ bool TrajoptServer::RunMINCOParking()
     std::vector<int> singuls{1};
 
     // 优化器按每个多项式采样点读取走廊，因此将“一段一个走廊”展开到各采样点。
+    const ros::WallTime expand_start = ros::WallTime::now();
     std::vector<Eigen::MatrixXd> sampled_corridors;
     for (size_t i = 0; i < piece_num; ++i) {
         const int resolution = (i == 0 || i + 1 == piece_num)
@@ -807,17 +1002,32 @@ bool TrajoptServer::RunMINCOParking()
     }
     std::vector<std::vector<Eigen::MatrixXd>> corridor_container{
         sampled_corridors};
+    const double expand_ms = elapsedMs(expand_start);
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] corridor_expand_ms=%.3f sampled_corridors=%zu",
+             static_cast<unsigned long>(trajopt_seq_), expand_ms,
+             sampled_corridors.size());
 
+    const ros::WallTime optimize_start = ros::WallTime::now();
     if (!ploy_traj_opt_->OptimizeTrajectory(
             initial_states, final_states, initial_inner_points, initial_times,
             corridor_container, time_ratios, singuls)) {
         ROS_ERROR("MINCO 轨迹优化失败");
+        ROS_WARN("[planner_timing][trajopt][seq=%lu] optimize_failed optimize_ms=%.3f path_to_now_ms=%.3f",
+                 static_cast<unsigned long>(trajopt_seq_),
+                 elapsedMs(optimize_start), elapsedFromActivePathMs());
         return false;
     }
+    const double optimize_ms = elapsedMs(optimize_start);
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] optimize_ms=%.3f",
+             static_cast<unsigned long>(trajopt_seq_), optimize_ms);
 
+    const ros::WallTime extract_start = ros::WallTime::now();
     const auto* min_jerk_optimizers = ploy_traj_opt_->getMinJerkOptPtr();
     if (min_jerk_optimizers->empty()) {
         ROS_ERROR("MINCO 未返回有效轨迹");
+        ROS_WARN("[planner_timing][trajopt][seq=%lu] extract_failed extract_ms=%.3f path_to_now_ms=%.3f",
+                 static_cast<unsigned long>(trajopt_seq_),
+                 elapsedMs(extract_start), elapsedFromActivePathMs());
         return false;
     }
     const plan_utils::Trajectory optimized_trajectory =
@@ -825,18 +1035,16 @@ bool TrajoptServer::RunMINCOParking()
     traj_container_.clearSingul();
     traj_container_.addSingulTraj(
         optimized_trajectory, ros::Time::now().toSec(), 0);
-    // 先发布候选轨迹及其首尾位姿，再执行发布前验收。
-    displayMincoTraj(traj_container_.singul_traj, false);
+    const double extract_ms = elapsedMs(extract_start);
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] trajectory_extract_ms=%.3f optimized_duration=%.3f piece_num=%d",
+             static_cast<unsigned long>(trajopt_seq_), extract_ms,
+             optimized_trajectory.getTotalDuration(),
+             optimized_trajectory.getPieceNum());
 
-    if (!validateTrajectory(optimized_trajectory)) {
-        ROS_ERROR("MINCO 轨迹未通过发布前验收，本次轨迹不会发送给控制器");
-        return false;
-    }
-    nav_msgs::Path empty_debug_path;
-    empty_debug_path.header.frame_id = "map";
-    empty_debug_path.header.stamp = ros::Time::now();
-    debug_traj_pub_.publish(empty_debug_path);
-    displayMincoTraj(traj_container_.singul_traj);
+    displayMincoTraj(traj_container_.singul_traj, end_yaw);
+    ROS_INFO("[planner_timing][trajopt][seq=%lu] minco_pipeline_total_ms=%.3f path_to_now_ms=%.3f",
+             static_cast<unsigned long>(trajopt_seq_), elapsedMs(total_start),
+             elapsedFromActivePathMs());
     return true;
 }
 

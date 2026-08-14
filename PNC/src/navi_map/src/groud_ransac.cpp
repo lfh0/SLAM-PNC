@@ -22,7 +22,6 @@ int main(int argc, char** argv)
     std::string input_pcd;
     std::string ground_pcd;
     std::string nonground_pcd;
-    std::string ground_topic;
     int MeanK;
     double Thresh;
     nh.getParam("navi_map/map_dir/pcd_file_path", input_pcd);
@@ -34,11 +33,10 @@ int main(int argc, char** argv)
     nh.getParam("navi_map/OutlierRemoval/dist_thresh", dist_thresh);
     nh.getParam("navi_map/OutlierRemoval/max_tilt_deg", max_tilt_deg);
     nh.getParam("navi_map/OutlierRemoval/max_iters", max_iters);
-    nh.getParam("navi_map/OutlierRemoval/topic", ground_topic);
     nh.getParam("navi_map/OutlierRemoval/meanK", MeanK);
     nh.getParam("navi_map/OutlierRemoval/Thresh", Thresh);
 
-    ros::Publisher ground_pub = nh.advertise<sensor_msgs::PointCloud2> (ground_topic, 1);
+    ros::Publisher ground_pub = nh.advertise<sensor_msgs::PointCloud2> ("/remove_outliers/pointcloud", 1);
 
     // 读取点云
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);

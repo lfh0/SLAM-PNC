@@ -18,6 +18,7 @@ namespace plan_manage
     piece_time_ratios_container = pieceTimeRatios;
     iniState_container = iniStates;
     finState_container = finStates;
+    anchor_points_container = initInnerPts;
     singul_container = singuls; //1
     variable_num_ = 0;
     jerkOpt_container.clear();
@@ -177,7 +178,8 @@ namespace plan_manage
   double PolyTrajOptimizer::costFunctionCallback(void *func_data, const Eigen::VectorXd &x, Eigen::VectorXd &grad)
   {
 
-    double total_smcost = 0.0, total_timecost = 0.0, penalty_cost = 0.0;
+    double total_smcost = 0.0, total_timecost = 0.0;
+    double penalty_cost = 0.0, anchor_cost = 0.0;
     PolyTrajOptimizer *opt = reinterpret_cast<PolyTrajOptimizer *>(func_data);//将void* 强转成 PolyTrajOptimizer*
     int offset = 0;
     std::vector<Eigen::Map<const Eigen::MatrixXd>> P_container;
@@ -278,11 +280,34 @@ namespace plan_manage
       time_of_cost = total_timecost;
     }
 
+    if (opt->wei_anchor_ > 0.0) {
+      for (int trajid = 0; trajid < opt->trajnum; trajid++) {
+        if (static_cast<size_t>(trajid) >= opt->anchor_points_container.size()
+            || opt->anchor_points_container[trajid].rows() != P_container[trajid].rows()
+            || opt->anchor_points_container[trajid].cols() != P_container[trajid].cols()) {
+          ROS_WARN_THROTTLE(1.0,
+                            "MINCO anchor points size mismatch, skip anchor cost for traj %d",
+                            trajid);
+          continue;
+        }
+        const Eigen::MatrixXd diff =
+            P_container[trajid] - opt->anchor_points_container[trajid];
+        anchor_cost += opt->wei_anchor_ * diff.squaredNorm();
+        gradP_container[trajid] += 2.0 * opt->wei_anchor_ * diff;
+      }
+    }
+
     opt->iter_num_ += 1;
     // cout << "opt->iter_num_: " << opt->iter_num_ << endl;
     // std::cout << "sm_cost: " << smoothness_cost << " time_cost: " << time_of_cost << " colli_pen: " << collision_penalty << " dyn_pen: " << dynamic_penalty << "feas_pen: " << feasibility_penalty << std::endl;
     // cout << "total: " << total_smcost + total_timecost + penalty_cost << endl;
-    return total_smcost + total_timecost + penalty_cost;
+    if (opt->iter_num_ % 50 == 0) {
+      ROS_INFO("[minco_cost] iter=%d smooth=%.3f time=%.3f penalty=%.3f anchor=%.3f total=%.3f",
+               opt->iter_num_, total_smcost, total_timecost, penalty_cost,
+               anchor_cost,
+               total_smcost + total_timecost + penalty_cost + anchor_cost);
+    }
+    return total_smcost + total_timecost + penalty_cost + anchor_cost;
   }
 
   int PolyTrajOptimizer::earlyExitCallback(void *func_data, const double *x, const double *g, const double fx, const double xnorm, const double gnorm, const double step, int n, int k, int ls)
@@ -1300,6 +1325,7 @@ namespace plan_manage
       nh_.param("optimizing/wei_dyn_obs", wei_surround_, 7000.0);
       nh_.param("optimizing/wei_feas", wei_feas_, 1000.0);
       nh_.param("optimizing/wei_time", wei_time_, 500.0);
+      nh_.param("optimizing/wei_anchor", wei_anchor_, 0.0);
       nh_.param("optimizing/dyn_obs_clearance", surround_clearance_, 1.0);
       nh_.param("optimizing/max_vel", max_vel_, 3.0);
       nh_.param("optimizing/max_acc", max_acc_, 1.5);

@@ -43,9 +43,12 @@ Missionpointmaker::Missionpointmaker(ros::NodeHandle nh):
 nh_(nh)
 {
     ROS_INFO("This is a node that mark the path point...");
- 
-    getPathpointSub_ = nh_.subscribe("/move_base_simple/goal", 1, &Missionpointmaker::getPathpointCallBack, this);
-    showPathpointPub_ = nh_.advertise<geometry_msgs::PoseArray>("/mission_points",1);
+
+    std::string goal_topic;
+    ros::NodeHandle private_nh("~");
+    private_nh.param<std::string>("goal_topic", goal_topic, "/move_base_simple/goal");
+    getPathpointSub_ = nh_.subscribe(goal_topic, 1, &Missionpointmaker::getPathpointCallBack, this);
+    showPathpointPub_ = nh_.advertise<geometry_msgs::PoseArray>("/mission_points", 1);
 }
 
 

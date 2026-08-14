@@ -1,0 +1,60 @@
+mpc_node:
+  # MPC 预测步长，单位 s；参考轨迹会按该时间间隔从离散轨迹点中抽样。
+  prediction_dt: 0.1
+  # 预测步数；参考窗口大小为 horizon + 1。
+  horizon: 20
+
+  # 状态误差权重：e = [x_error, y_error, yaw_error]。
+  q_x: 30000.0
+  q_y: 30000.0
+  q_yaw: 1500.0
+
+  # 控制修正权重：du = [v_error, w_error]。
+  r_v: 30.0
+  r_w: 60.0
+
+  # 控制变化率权重。
+  rd_v: 150.0
+  rd_w: 400.0
+
+  # 速度和控制量约束。
+  min_velocity: -0.3
+  max_velocity: 0.3
+  min_acceleration: -0.5
+  max_acceleration: 0.5
+  min_angular_velocity: -0.4
+  max_angular_velocity: 0.4
+
+  # v,w 作为硬约束；该开关保留用于兼容旧配置。
+  constrain_velocity: false
+  # 轨迹优化的时间参数化可能超过底盘能力，MPC 使用前先把参考 v/a/w 裁剪到车辆约束内。
+  limit_reference_dynamics: true
+  # 按车辆最大速度对应的弧长间隔取参考点，避免不可执行的快轨迹把预测点选得过远。
+  resample_reference_by_arc_length: true
+
+  # 相邻预测步控制变化量约束。
+  min_velocity_delta: -0.05
+  max_velocity_delta: 0.05
+  min_angular_velocity_delta: -0.1
+  max_angular_velocity_delta: 0.1
+  # 控制变化率先只放在代价函数中惩罚，调通后再按车辆能力打开硬约束。
+  constrain_control_rate: false
+
+  # 终点判断阈值。
+  goal_position_tolerance: 0.05
+  goal_yaw_tolerance: 0.08
+
+  # OSQP 求解器参数。
+  osqp_max_iteration: 4000
+  osqp_absolute_tolerance: 0.0001
+  osqp_relative_tolerance: 0.0001
+
+  # MPC预测路径，用于RViz显示。
+  publish_predicted_path: true
+  predicted_path_topic: "/controller/mpc_predicted_path"
+  predicted_path_frame_id: "map"
+
+  # 打印最近点和第一个参考点，调试参考窗口时开启。
+  debug_reference: true
+  # 打印初始误差和第一步线性化 A/B 矩阵，调试模型时开启。
+  debug_model: false

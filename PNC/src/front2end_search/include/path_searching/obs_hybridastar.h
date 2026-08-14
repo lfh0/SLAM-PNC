@@ -63,6 +63,8 @@ public:
     double g_score, f_score;
     char node_state;
 
+    
+
     MiddleNode* parent;
 
     MiddleNode()
@@ -165,7 +167,7 @@ public:
   };  
 
 
-  class KinoAstar {
+  class ObsHybridAstar {
   
   private:
     /* ---------- main data structure ---------- */
@@ -310,8 +312,8 @@ public:
     }
 
   public:
-    KinoAstar();
-    ~KinoAstar();
+    ObsHybridAstar();
+    ~ObsHybridAstar();
     ros::NodeHandle nh_;
     std::vector<Eigen::Vector2d> car_vertex_small_, car_vertex_, car_vertex_big_;
 
@@ -338,7 +340,7 @@ public:
     void checkCollisionUsingLine(const Eigen::Vector2d &start_pt, const Eigen::Vector2d &end_pt, bool &res);    
 
 
-    vector<Eigen::Vector2d> getKinoPath(){return final_path_;}
+    vector<Eigen::Vector2d> getPath(){return final_path_;}
     /*hzchzc*/
     Eigen::Vector3d evaluatePos(double t);
     std::vector<Eigen::Vector4d> SamplePosList(int N); //px py yaw t 
@@ -352,7 +354,7 @@ public:
     std::vector<Eigen::Vector4d>  state_list;
     std::vector<Eigen::Vector3d> acc_list;
 
-    typedef shared_ptr<KinoAstar> Ptr;
+    typedef shared_ptr<ObsHybridAstar> Ptr;
 
 
   };

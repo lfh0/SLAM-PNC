@@ -19,6 +19,7 @@ struct MpcReferencePoint
     double v = 0.0;
     double a = 0.0;
     double w = 0.0;
+    double steering_angle = 0.0;
     double time_from_start = 0.0;
 };
 
@@ -45,19 +46,19 @@ private:
     int findNearestIndex(const RobotState& robot_state);
     bool buildReferenceWindow(int nearest_index,
                               std::vector<MpcReferencePoint>& reference_window) const;
-    Eigen::Matrix<double, 3, 1> buildCurrentState(const RobotState& robot_state) const;
-    Eigen::Matrix<double, 3, 1> buildStateError(
-        const Eigen::Matrix<double, 3, 1>& current_state,
+    Eigen::Matrix<double, 4, 1> buildCurrentState(const RobotState& robot_state) const;
+    Eigen::Matrix<double, 4, 1> buildStateError(
+        const Eigen::Matrix<double, 4, 1>& current_state,
         const MpcReferencePoint& reference) const;
     void buildLinearizedModel(
         const std::vector<MpcReferencePoint>& reference_window,
-        std::vector<Eigen::Matrix3d>& a_matrices,
-        std::vector<Eigen::Matrix<double, 3, 2>>& b_matrices) const;
+        std::vector<Eigen::Matrix4d>& a_matrices,
+        std::vector<Eigen::Matrix<double, 4, 2>>& b_matrices) const;
     bool buildQpProblem(
-        const Eigen::Matrix<double, 3, 1>& initial_error,
+        const Eigen::Matrix<double, 4, 1>& initial_error,
         const std::vector<MpcReferencePoint>& reference_window,
-        const std::vector<Eigen::Matrix3d>& a_matrices,
-        const std::vector<Eigen::Matrix<double, 3, 2>>& b_matrices,
+        const std::vector<Eigen::Matrix4d>& a_matrices,
+        const std::vector<Eigen::Matrix<double, 4, 2>>& b_matrices,
         MpcQpData& qp_data) const;
     bool solveQp(MpcQpData& qp_data,
                  Eigen::Matrix<double, 2, 1>& control_delta,
@@ -67,12 +68,12 @@ private:
         const Eigen::VectorXd& solution) const;
     void printReferenceWindowDebug(
         int nearest_index,
-        const Eigen::Matrix<double, 3, 1>& initial_error,
+        const Eigen::Matrix<double, 4, 1>& initial_error,
         const std::vector<MpcReferencePoint>& reference_window) const;
     int stateIndex(int step, int state_offset) const;
     int controlIndex(int step, int control_offset) const;
-    Eigen::Matrix3d buildAMatrix(const MpcReferencePoint& reference) const;
-    Eigen::Matrix<double, 3, 2> buildBMatrix(const MpcReferencePoint& reference) const;
+    Eigen::Matrix4d buildAMatrix(const MpcReferencePoint& reference) const;
+    Eigen::Matrix<double, 4, 2> buildBMatrix(const MpcReferencePoint& reference) const;
     MpcReferencePoint convertTrajectoryPoint(
         const robot_trajectory_msgs::RobotTrajectoryPoint& point) const;
     double getTrajectorySampleInterval() const;
@@ -89,20 +90,25 @@ private:
     double q_x_ = 1.0;
     double q_y_ = 1.0;
     double q_yaw_ = 0.5;
-    double r_v_ = 0.1;
-    double r_w_ = 0.2;
-    double rd_v_ = 0.5;
-    double rd_w_ = 1.0;
+    double q_v_ = 0.1;
+    double r_a_ = 0.1;
+    double r_delta_ = 0.2;
+    double rd_a_ = 0.5;
+    double rd_delta_ = 1.0;
     double min_velocity_ = 0.0;
     double max_velocity_ = 0.7;
     double min_acceleration_ = -0.5;
     double max_acceleration_ = 0.5;
     double min_angular_velocity_ = -0.3;
     double max_angular_velocity_ = 0.3;
-    double min_velocity_delta_ = -0.05;
-    double max_velocity_delta_ = 0.05;
-    double min_angular_velocity_delta_ = -0.1;
-    double max_angular_velocity_delta_ = 0.1;
+    double min_acceleration_delta_ = -0.1;
+    double max_acceleration_delta_ = 0.1;
+    double wheel_base_ = 1.0;
+    double min_front_steering_angle_ = -0.436332;
+    double max_front_steering_angle_ = 0.436332;
+    double min_front_steering_angle_delta_ = -0.1;
+    double max_front_steering_angle_delta_ = 0.1;
+    double min_steering_conversion_speed_ = 0.02;
     double goal_position_tolerance_ = 0.05;
     double goal_yaw_tolerance_ = 0.08;
     double goal_yaw_adjust_kp_ = 0.8;

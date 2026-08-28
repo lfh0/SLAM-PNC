@@ -1,8 +1,8 @@
 <launch>
 
       <arg name="rviz" default="false" />
-      <param name="/use_sim_time" value="false" />
-      <node name="map_load" pkg="map_server" type="map_server" args="$(find navi_map)/maps/lab212road.yaml" />
+      <param name="/use_sim_time" value="false " />
+      <node name="map_load" pkg="map_server" type="map_server" args="$(find navi_map)/maps/sim.yaml" />
       
       <rosparam file="$(find navi_map)/config/global_inflation_local_obstacle.yaml" command="load" subst_value="true" />
 

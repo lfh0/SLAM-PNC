@@ -4,18 +4,19 @@ mpc_node:
   # 预测步数；参考窗口大小为 horizon + 1。
   horizon: 20
 
-  # 状态误差权重：e = [x_error, y_error, yaw_error]。
+  # 状态误差权重：e = [x_error, y_error, yaw_error, v_error]。
   q_x: 30000.0
   q_y: 30000.0
   q_yaw: 1500.0
+  q_v: 100.0
 
-  # 控制修正权重：du = [v_error, w_error]。
-  r_v: 30.0
-  r_w: 60.0
+  # 控制修正权重：du = [a_error, front_steering_angle_error]。
+  r_a: 30.0
+  r_delta: 60.0
 
   # 控制变化率权重。
-  rd_v: 150.0
-  rd_w: 400.0
+  rd_a: 150.0
+  rd_delta: 400.0
 
   # 速度和控制量约束。
   min_velocity: -0.3
@@ -24,8 +25,15 @@ mpc_node:
   max_acceleration: 0.5
   min_angular_velocity: -0.4
   max_angular_velocity: 0.4
+  # 自行车模型轴距，单位 m；用于由轨迹角速度换算参考前轮转角。
+  wheel_base: 1.0
+  # 前轮转角硬约束，单位 rad；0.436332 rad 约等于 25 deg。
+  min_front_steering_angle: -0.436332
+  max_front_steering_angle: 0.436332
+  # 参考角速度转前轮转角时，速度过小会导致数值不稳定，低于该速度时参考转角置零。
+  min_steering_conversion_speed: 0.02
 
-  # v,w 作为硬约束；该开关保留用于兼容旧配置。
+  # v,a,delta 作为硬约束；该开关保留用于兼容旧配置。
   constrain_velocity: false
   # 轨迹优化的时间参数化可能超过底盘能力，MPC 使用前先把参考 v/a/w 裁剪到车辆约束内。
   limit_reference_dynamics: true
@@ -33,10 +41,10 @@ mpc_node:
   resample_reference_by_arc_length: true
 
   # 相邻预测步控制变化量约束。
-  min_velocity_delta: -0.05
-  max_velocity_delta: 0.05
-  min_angular_velocity_delta: -0.1
-  max_angular_velocity_delta: 0.1
+  min_acceleration_delta: -0.1
+  max_acceleration_delta: 0.1
+  min_front_steering_angle_delta: -0.1
+  max_front_steering_angle_delta: 0.1
   # 控制变化率先只放在代价函数中惩罚，调通后再按车辆能力打开硬约束。
   constrain_control_rate: false
 

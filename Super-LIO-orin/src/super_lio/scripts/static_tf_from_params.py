@@ -42,7 +42,7 @@ def main():
     broadcaster = tf2_ros.StaticTransformBroadcaster()
     broadcaster.sendTransform([
         make_transform("robot", "imu", xyz, rpy_rad),
-        make_transform("map", "world", [0.0, 0.0, 2.0], [0.0, 0.0, 0.0]),
+        make_transform("map", "world", [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
     ])
 
     rospy.loginfo(

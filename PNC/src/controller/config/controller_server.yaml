@@ -8,4 +8,4 @@ controller_server:
 
   max_forward_linear_velocity: 1.2
   max_backward_linear_velocity: -1.2
-  max_angular_velocity: 0.4
+  max_angular_velocity: 0.3

@@ -14,7 +14,7 @@ astar:
 
   # 起步阶段先沿当前 yaw 生成固定前缀，再从前缀末端开始 A* 启发搜索
   yaw_prefix:
-    enabled: true
+    enabled: false
     points: 20
     # true 表示前缀无法完整生成时直接搜索失败；false 表示使用可生成的部分前缀继续搜索
     strict: false

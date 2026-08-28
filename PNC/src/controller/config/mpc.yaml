@@ -2,41 +2,49 @@ mpc_node:
   # MPC 预测步长，单位 s；参考轨迹会按该时间间隔从离散轨迹点中抽样。
   prediction_dt: 0.1
   # 预测步数；参考窗口大小为 horizon + 1。
-  horizon: 20
+  horizon: 10
 
-  # 状态误差权重：e = [x_error, y_error, yaw_error]。
+  # 状态误差权重：e = [x_error, y_error, yaw_error, v_error]。
   q_x: 7000.0
   q_y: 7000.0
-  q_yaw: 1000.0
+  q_yaw: 100.0
+  q_v: 100.0
 
-  # 控制修正权重：du = [v_error, w_error]。
-  r_v: 30.0
-  r_w: 70.0
+  # 控制修正权重：du = [a_error, front_steering_angle_error]。
+  r_a: 30.0
+  r_delta: 70.0
 
   # 控制变化率权重。
-  rd_v: 150.0
-  rd_w: 2500.0
+  rd_a: 150.0
+  rd_delta: 7000.0
 
   # 速度和控制量约束。
-  min_velocity: -0.3
-  max_velocity: 0.3
+  min_velocity: -0.7
+  max_velocity: 0.7
   min_acceleration: -0.5
   max_acceleration: 0.5
-  min_angular_velocity: -0.4
-  max_angular_velocity: 0.4
+  min_angular_velocity: -0.3
+  max_angular_velocity: 0.3
+  # 自行车模型轴距，单位 m；用于由轨迹角速度换算参考前轮转角。
+  wheel_base: 0.5
+  # 前轮转角硬约束，单位 rad；0.436332 rad 约等于 25 deg。
+  min_front_steering_angle: -0.436332
+  max_front_steering_angle: 0.436332
+  # 参考角速度转前轮转角时，速度过小会导致数值不稳定，低于该速度时参考转角置零。
+  min_steering_conversion_speed: 0.02
 
-  # v,w 作为硬约束；该开关保留用于兼容旧配置。
-  constrain_velocity: false
+  # v,a,delta 作为硬约束；该开关保留用于兼容旧配置。
+  constrain_velocity: true
   # 轨迹优化的时间参数化可能超过底盘能力，MPC 使用前先把参考 v/a/w 裁剪到车辆约束内。
   limit_reference_dynamics: true
   # 按车辆最大速度对应的弧长间隔取参考点，避免不可执行的快轨迹把预测点选得过远。
   resample_reference_by_arc_length: true
 
   # 相邻预测步控制变化量约束。
-  min_velocity_delta: -0.05
-  max_velocity_delta: 0.05
-  min_angular_velocity_delta: -0.1
-  max_angular_velocity_delta: 0.1
+  min_acceleration_delta: -0.1
+  max_acceleration_delta: 0.1
+  min_front_steering_angle_delta: -0.1
+  max_front_steering_angle_delta: 0.1
   # 控制变化率先只放在代价函数中惩罚，调通后再按车辆能力打开硬约束。
   constrain_control_rate: false
 

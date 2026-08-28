@@ -156,7 +156,11 @@ bool ESKF::Predict(const IMUData& imu, DynamicState& state_imu, DynamicState& st
   state_robot.time = imu.secs;
   state_robot.R = new_R.R_;
   state_robot.p = new_p;
-  // todo: v, w, a
+
+  // robot 原点相对 imu 原点的杆臂，表达在 imu 坐标系下。
+  V3 imu_to_robot = -g_odom_robo.R_ * g_odom_robo.t_;
+  state_robot.v = fw_v_ + fw_R_.R_ * gyr.cross(imu_to_robot);
+  state_robot.w = g_odom_robo.R_.transpose() * gyr;
 
   return true;
 }

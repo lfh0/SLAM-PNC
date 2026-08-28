@@ -462,12 +462,22 @@ void ROSWrapper::imuHandler(const sensor_msgs::Imu::ConstPtr& msg){
       odom_robo.pose.pose.orientation.y = q.y();
       odom_robo.pose.pose.orientation.z = q.z();
       odom_robo.pose.pose.orientation.w = q.w();
+
+      odom_robo.twist.twist.linear.x = robo_state.v(0);
+      odom_robo.twist.twist.linear.y = robo_state.v(1);
+      odom_robo.twist.twist.linear.z = robo_state.v(2);
+
+      odom_robo.twist.twist.angular.x = robo_state.w(0);
+      odom_robo.twist.twist.angular.y = robo_state.w(1);
+      odom_robo.twist.twist.angular.z = robo_state.w(2);
     }
 
     odom_imu.header.stamp = msg->header.stamp;
     odom_robo.header.stamp = msg->header.stamp;
     odom_imu.header.frame_id = "world";
     odom_robo.header.frame_id = "world";
+    odom_imu.child_frame_id = "imu";
+    odom_robo.child_frame_id = "robot";
     pub_imu_odom.publish(odom_imu);
     pub_robo_odom.publish(odom_robo);
   }

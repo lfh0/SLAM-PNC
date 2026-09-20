@@ -1,4 +1,5 @@
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -63,6 +64,7 @@ class LocalMincoOptimizerNode {
     pnh_.param("optimizing/max_acc", config.minco.max_acc, config.max_acceleration_mps2);
     pnh_.param("optimizing/max_cur", config.minco.max_cur, 0.4);
     pnh_.param("optimizing/half_margin", config.minco.half_margin, 0.25);
+    pnh_.param("optimizing/max_solver_time_ms", max_solver_time_ms_, 400.0);
     pnh_.param("logging/info_every_n", config.minco.logging_every_n, 50);
     bool enable_iteration_log = true;
     pnh_.param("logging/enable_iteration_log", enable_iteration_log, true);
@@ -110,13 +112,14 @@ class LocalMincoOptimizerNode {
     ROS_INFO("Local MINCO settings: corridor_cost>=%d unknown=%s vehicle=%.2fx%.2f margin=%.2f "
              "weights(obs=%.0f,dyn=%.0f,feas=%.0f,time=%.0f,anchor=%.0f) "
              "limits(v=%.2f,a=%.2f,cur=%.2f) lbfgs(max_iter=1000,mem=64,g_eps=1e-4,min_step=1e-12) "
-             "iteration_log=%s/%d",
+             "iteration_log=%s/%d solver_budget_ms=%.1f",
              config.occupied_threshold, config.unknown_is_obstacle ? "true" : "false",
              config.vehicle_length_m, config.vehicle_width_m, config.footprint_margin_m,
              config.minco.wei_obs, config.minco.wei_surround, config.minco.wei_feas,
              config.minco.wei_time, config.minco.wei_anchor, config.minco.max_vel,
              config.minco.max_acc, config.minco.max_cur,
-             enable_iteration_log ? "on" : "off", config.minco.logging_every_n);
+             enable_iteration_log ? "on" : "off", config.minco.logging_every_n,
+             max_solver_time_ms_);
   }
 
   ~LocalMincoOptimizerNode() {
@@ -269,14 +272,35 @@ class LocalMincoOptimizerNode {
                static_cast<unsigned long long>(request.request_id),
                request.geometric_path.poses.size(), map.info.width, map.info.height,
                map.info.resolution);
-      const auto cancelled = [this, generation] {
+      const auto total_start = std::chrono::steady_clock::now();
+      const auto deadline = total_start + std::chrono::milliseconds(
+          static_cast<long long>(std::max(0.0, max_solver_time_ms_)));
+      bool time_budget_exceeded = false;
+      const auto superseded = [this, generation] {
         return shutting_down_ || generation_.load() != generation;
       };
-      const auto total_start = std::chrono::steady_clock::now();
-      const LocalMincoResult result = optimizer_->optimize(request, map, cancelled);
+      const auto cancelled = [&superseded, &deadline, &time_budget_exceeded, this] {
+        if (superseded()) return true;
+        if (max_solver_time_ms_ > 0.0 && std::chrono::steady_clock::now() >= deadline) {
+          time_budget_exceeded = true;
+          return true;
+        }
+        return false;
+      };
+      LocalMincoResult result = optimizer_->optimize(request, map, cancelled);
       const double total_time_ms = std::chrono::duration<double, std::milli>(
           std::chrono::steady_clock::now() - total_start).count();
-      if (cancelled() || result.cancelled) {
+      if (time_budget_exceeded && !superseded()) {
+        result.cancelled = false;
+        result.reason = "TIME_BUDGET_EXCEEDED";
+        ROS_ERROR("Local MINCO exceeded time budget for A* candidate: episode=%llu request=%llu "
+                  "budget_ms=%.1f iter=%d solver_ms=%.3f total_ms=%.3f",
+                  static_cast<unsigned long long>(request.episode_id),
+                  static_cast<unsigned long long>(request.request_id), max_solver_time_ms_,
+                  result.iterations, result.optimize_time_ms, total_time_ms);
+        publishStatus(robot_trajectory_msgs::LocalOptimizationStatus::FAILED,
+                      request.episode_id, request.request_id, result.reason);
+      } else if (superseded() || result.cancelled) {
         ROS_WARN("Local MINCO cancelled: episode=%llu request=%llu reason=%s iter=%d solver_ms=%.3f total_ms=%.3f",
                  static_cast<unsigned long long>(request.episode_id),
                  static_cast<unsigned long long>(request.request_id), result.reason.c_str(),
@@ -324,6 +348,7 @@ class LocalMincoOptimizerNode {
   bool has_map_ = false, has_pending_ = false;
   std::atomic<bool> shutting_down_{false};
   std::atomic<std::uint64_t> generation_{0};
+  double max_solver_time_ms_ = 400.0;
 };
 
 }  // namespace local_optimization_manager

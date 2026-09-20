@@ -184,12 +184,9 @@ namespace plan_manage
 
     } 
     else if (result == lbfgs::LBFGSERR_MAXIMUMLINESEARCH){
-      if (verbose_) {
-        printf("\033[32miter=%d,time(ms)=%5.3f,total_t(ms)=%5.3f,cost=%5.3f\n\033[0m", iter_num_, time_ms.count(), total_time_ms.count(), final_cost);
-      }
-      ROS_WARN("Lbfgs: The line-search routine reaches the maximum number of evaluations.");
-      flag_force_return = false;
-      flag_success = true;
+      ROS_ERROR("Lbfgs line-search reached its evaluation limit: iter=%d time_ms=%.3f cost=%.6f. Reject this trajectory.",
+                iter_num_, time_ms.count(), final_cost);
+      flag_success = false;
     }
     else
     {
@@ -259,7 +256,13 @@ namespace plan_manage
     result.final_cost = lastFinalCost();
     result.solver_result = lastSolverResult();
     if (!optimized) {
-      result.failure_reason = result.cancelled ? "cancelled" : "optimizer_failed";
+      if (result.cancelled) {
+        result.failure_reason = "cancelled";
+      } else if (result.solver_result == lbfgs::LBFGSERR_MAXIMUMLINESEARCH) {
+        result.failure_reason = "LBFGS_MAXIMUM_LINESEARCH";
+      } else {
+        result.failure_reason = "optimizer_failed";
+      }
       return result;
     }
     if (jerkOpt_container.empty()) {
@@ -1481,6 +1484,7 @@ namespace plan_manage
       wei_feas_ = config.wei_feas;
       wei_time_ = config.wei_time;
       wei_anchor_ = config.wei_anchor;
+      logging_every_n_ = std::max(0, config.logging_every_n);
       surround_clearance_ = config.surround_clearance;
       max_vel_ = config.max_vel;
       max_acc_ = config.max_acc;
@@ -1491,7 +1495,6 @@ namespace plan_manage
       car_length_ = config.car_length;
       car_width_ = config.car_width;
       car_d_cr_ = config.car_d_cr;
-      logging_every_n_ = std::max(0, config.logging_every_n);
 
       B_h << 0, -1,
              1, 0;

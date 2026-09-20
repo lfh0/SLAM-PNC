@@ -59,6 +59,8 @@ optimizing:
   max_acc: 0.50
   max_cur: 0.40
   half_margin: 0.10
+  # 局部重规划必须在该端到端预算内完成；超时不发布中间轨迹。
+  max_solver_time_ms: 400.0
 
 initial_time:
   min_speed: 0.2

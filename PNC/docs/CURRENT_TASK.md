@@ -563,7 +563,7 @@ rosrun training_data_tools check_t2_bag.sh /home/lfh/SLAM+PNC/datasets/raw_t2/<�
 
 2026-09-20已完成局部膨胀与安全走廊分层：仅局部costmap改为`inflation_radius=1.0 m`、`cost_scaling_factor=5.0`，以给局部A*保留低代价缓冲层；局部MINCO走廊与自身发布前复检仅使用`cost>=253`的致命障碍核心，并由完整车辆`0.6 x 0.5 m + 0.1 m`包络保证物理余量。局部MINCO和LA-02的未知栅格语义同步为可通行。重启局部costmap、LA-02、LA-03、LA-04A和LA-04B后，需验证局部A*仍可绕障、MINCO走廊正常生成、绿色候选轨迹通过校验。
 
-2026-09-20运行态记录：局部MINCO收到`episode=6/request=7`的A*候选后，L-BFGS运行381次迭代、求解耗时`5189.702 ms`，以`solver_result=-1009`（线搜索达到最大评估次数）结束。现有核心将该返回码作为可继续校验的中间解；发布前检查发现优化轨迹到局部A*折线的最大距离超过`validation/max_reference_deviation_m=0.35 m`，故以`REFERENCE_DEVIATION_LIMIT`拒绝，未发布候选轨迹。该结果证明失败点在“非健康求解结果的后验贴合检查”，不在A*触发或消息链路。下一步应将`-1009`改为严格失败，并为局部MINCO增加300~500 ms墙钟预算；在此之前不得仅放宽轨迹偏离阈值。
+2026-09-20运行态记录：局部MINCO收到`episode=6/request=7`的A*候选后，L-BFGS运行381次迭代、求解耗时`5189.702 ms`，以`solver_result=-1009`（线搜索达到最大评估次数）结束。旧核心将该返回码作为可继续校验的中间解；发布前检查发现优化轨迹到局部A*折线的最大距离超过`validation/max_reference_deviation_m=0.35 m`，故以`REFERENCE_DEVIATION_LIMIT`拒绝，未发布候选轨迹。该结果证明失败点在“非健康求解结果的后验贴合检查”，不在A*触发或消息链路。已修复：`-1009`现严格返回`LBFGS_MAXIMUM_LINESEARCH`，且局部MINCO默认使用`optimizing/max_solver_time_ms=400 ms`预算；超时返回`TIME_BUDGET_EXCEEDED`，不再占用重规划链路数秒。
 
 下一步固定为：先统一LA-03、LA-04B及F5的车辆参考点、车体包络和各层碰撞阈值语义；再用静态障碍场景验证“一次局部搜索→一次MINCO→稳定候选输出”，最后才开始LA-05仲裁接入。TEB不纳入当前模块四方案。
 

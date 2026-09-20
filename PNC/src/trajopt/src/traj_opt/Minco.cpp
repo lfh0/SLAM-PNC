@@ -26,6 +26,11 @@ namespace plan_manage
     jerkOpt_container.resize(trajnum);
     piece_num_container.resize(trajnum);
     double final_cost;
+    last_optimization_cancelled_ = false;
+    last_iteration_count_ = 0;
+    last_optimize_time_ms_ = 0.0;
+    last_final_cost_ = 0.0;
+    last_solver_result_ = 0;
 
     if(initTs.size()!=trajnum){
       ROS_ERROR("initTs.size()!=trajnum");
@@ -43,7 +48,9 @@ namespace plan_manage
       }
       //initInnerPts[i].cols()的值为 piece_num - 1
       int piece_num_ = initInnerPts[i].cols() + 1;
-      cout << "piece_num_: " << piece_num_ << endl;
+      if (verbose_) {
+        cout << "piece_num_: " << piece_num_ << endl;
+      }
       piece_num_container[i] = piece_num_;
       if(piece_time_ratios_container[i].size()!=piece_num_
           || (piece_time_ratios_container[i].array() <= 0.0).any()){
@@ -51,15 +58,26 @@ namespace plan_manage
         return false;
       }
       piece_time_ratios_container[i] /= piece_time_ratios_container[i].sum();
-      std::cout<<"cfgHs size: "<< cfgHs_container[i].size()<<std::endl;
-      if(cfgHs_container[i].size()!=(piece_num_ - 2) * (traj_resolution_ + 1) + 2 * (destraj_resolution_ + 1)){
-        std::cout<<"cfgHs size: "<< cfgHs_container[i].size()<<std::endl;
-        ROS_ERROR("cfgHs size error!");
+      const int expected_constraint_points =
+          (piece_num_ - 2) * (traj_resolution_ + 1) +
+          2 * (destraj_resolution_ + 1);
+      if (use_safe_corridor_constraints_) {
+        if (verbose_) {
+          std::cout << "cfgHs size: " << cfgHs_container[i].size() << std::endl;
+        }
+        if (cfgHs_container[i].size() != expected_constraint_points) {
+          ROS_ERROR("cfgHs size error!");
+          return false;
+        }
+        for (int k = 0; k < expected_constraint_points; k++) {
+          cfgHs_container[i][k].topRows<2>().colwise().normalize();
+        }
+      } else if (use_associated_obstacle_constraints_ &&
+                 (static_cast<size_t>(i) >= associated_obstacle_points_container_.size() ||
+                 associated_obstacle_points_container_[i].size() !=
+                     static_cast<size_t>(expected_constraint_points))) {
+        ROS_ERROR("associated obstacle points size error!");
         return false;
-      }
-      for (int k = 0; k < (piece_num_ - 2) * (traj_resolution_ + 1) + 2 * (destraj_resolution_ + 1); k++)
-      {
-        cfgHs_container[i][k].topRows<2>().colwise().normalize(); // norm vector outside
       }
 
       //reset the start end max_vel_
@@ -81,7 +99,9 @@ namespace plan_manage
 
     }  
     variable_num_ += trajnum;
-    cout << "variable_num_: " << variable_num_ << endl;
+    if (verbose_) {
+      cout << "variable_num_: " << variable_num_ << endl;
+    }
 
     // ros::Time t0 = ros::Time::now();
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -106,7 +126,7 @@ namespace plan_manage
     lbfgs::lbfgs_parameter_t lbfgs_params;
     lbfgs_params.mem_size = 64;//128
     lbfgs_params.past = 3; //3 
-    lbfgs_params.g_epsilon = 0.0;
+    lbfgs_params.g_epsilon = 0.0001;
     // lbfgs_params.max_linesearch = 200;
     lbfgs_params.min_step = 1.0e-12;
     lbfgs_params.delta = 1.0e-4;
@@ -130,28 +150,43 @@ namespace plan_manage
         final_cost,
         PolyTrajOptimizer::costFunctionCallback,
         NULL,
-        NULL,
+        PolyTrajOptimizer::progressCallback,
         this,
         lbfgs_params);
     // t2 = ros::Time::now();
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> time_ms = t2 - t1;
     std::chrono::duration<double, std::milli> total_time_ms = t2 - t0;
+    last_iteration_count_ = iter_num_;
+    last_optimize_time_ms_ = time_ms.count();
+    last_final_cost_ = final_cost;
+    last_solver_result_ = result;
     // double time_ms = (t2 - t1).toSec() * 1000;
     // double total_time_ms = (t2 - t0).toSec() * 1000;
     /* ---------- get result and check collision ---------- */
-    cout << "result: " << result << endl;
+    if (verbose_) {
+      cout << "result: " << result << endl;
+    }
+    if (result == lbfgs::LBFGS_CANCELED)
+    {
+      last_optimization_cancelled_ = true;
+      ROS_INFO("MINCO optimization cancelled by a newer frontend path after %d iterations", iter_num_);
+      return false;
+    }
     if (result == lbfgs::LBFGS_CONVERGENCE ||
-        result == lbfgs::LBFGS_CANCELED ||
         result == lbfgs::LBFGS_STOP||result == lbfgs::LBFGSERR_MAXIMUMITERATION)
     {
       flag_force_return = false;
       flag_success = true;
-      printf("\033[32miter=%d,time(ms)=%5.3f,total_t(ms)=%5.3f,cost=%5.3f\n\033[0m", iter_num_, time_ms.count(), total_time_ms.count(), final_cost);
+      if (verbose_) {
+        printf("\033[32miter=%d,time(ms)=%5.3f,total_t(ms)=%5.3f,cost=%5.3f\n\033[0m", iter_num_, time_ms.count(), total_time_ms.count(), final_cost);
+      }
 
     } 
     else if (result == lbfgs::LBFGSERR_MAXIMUMLINESEARCH){
-      printf("\033[32miter=%d,time(ms)=%5.3f,total_t(ms)=%5.3f,cost=%5.3f\n\033[0m", iter_num_, time_ms.count(), total_time_ms.count(), final_cost);
+      if (verbose_) {
+        printf("\033[32miter=%d,time(ms)=%5.3f,total_t(ms)=%5.3f,cost=%5.3f\n\033[0m", iter_num_, time_ms.count(), total_time_ms.count(), final_cost);
+      }
       ROS_WARN("Lbfgs: The line-search routine reaches the maximum number of evaluations.");
       flag_force_return = false;
       flag_success = true;
@@ -170,6 +205,70 @@ namespace plan_manage
     //   flag_success = false;
     // }
     return flag_success;
+  }
+
+  MincoResult PolyTrajOptimizer::optimize(const MincoRequest &request)
+  {
+    MincoResult result;
+    if (request.initial_state.rows() != 2 || request.initial_state.cols() != 3 ||
+        request.final_state.rows() != 2 || request.final_state.cols() != 3) {
+      result.failure_reason = "boundary_state_must_be_2x3";
+      return result;
+    }
+    if (request.initial_inner_points.rows() != 2 || request.initial_inner_points.cols() < 1) {
+      result.failure_reason = "initial_inner_points_must_be_2xN_N_ge_1";
+      return result;
+    }
+    const int piece_num = request.initial_inner_points.cols() + 1;
+    if (request.total_time <= 0.0 || request.piece_time_ratios.size() != piece_num ||
+        (request.use_safe_corridor_constraints && request.sampled_corridors.empty())) {
+      result.failure_reason = "invalid_time_ratios_or_corridors";
+      return result;
+    }
+    const int expected_constraint_points =
+        (piece_num - 2) * (traj_resolution_ + 1) + 2 * (destraj_resolution_ + 1);
+    if (!request.use_safe_corridor_constraints && request.use_associated_obstacle_constraints &&
+        request.associated_obstacle_points.size() !=
+            static_cast<size_t>(expected_constraint_points)) {
+      result.failure_reason = "invalid_associated_obstacle_points";
+      return result;
+    }
+
+    const std::function<bool()> previous_cancel_checker = cancel_checker_;
+    setCancelChecker(request.cancel_checker);
+    std::vector<Eigen::MatrixXd> initial_states{request.initial_state};
+    std::vector<Eigen::MatrixXd> final_states{request.final_state};
+    std::vector<Eigen::MatrixXd> inner_points{request.initial_inner_points};
+    Eigen::VectorXd total_times(1);
+    total_times << request.total_time;
+    std::vector<std::vector<Eigen::MatrixXd>> corridors{request.sampled_corridors};
+    std::vector<Eigen::VectorXd> time_ratios{request.piece_time_ratios};
+    std::vector<int> singulars{request.singular_direction};
+
+    use_safe_corridor_constraints_ = request.use_safe_corridor_constraints;
+    use_associated_obstacle_constraints_ = request.use_associated_obstacle_constraints;
+    associated_obstacle_points_container_ = {request.associated_obstacle_points};
+    static_obstacle_clearance_ = std::max(0.0, request.static_obstacle_clearance);
+    const bool optimized = OptimizeTrajectory(initial_states, final_states, inner_points,
+                                               total_times, corridors, time_ratios, singulars,
+                                               request.start_time, request.curvature_epsilon);
+    setCancelChecker(previous_cancel_checker);
+    result.cancelled = wasLastOptimizationCancelled();
+    result.iterations = lastIterationCount();
+    result.optimize_time_ms = lastOptimizeTimeMs();
+    result.final_cost = lastFinalCost();
+    result.solver_result = lastSolverResult();
+    if (!optimized) {
+      result.failure_reason = result.cancelled ? "cancelled" : "optimizer_failed";
+      return result;
+    }
+    if (jerkOpt_container.empty()) {
+      result.failure_reason = "optimizer_returned_no_trajectory";
+      return result;
+    }
+    result.trajectory = jerkOpt_container.front().getTraj(request.singular_direction);
+    result.success = true;
+    return result;
   }
 
 
@@ -301,7 +400,8 @@ namespace plan_manage
     // cout << "opt->iter_num_: " << opt->iter_num_ << endl;
     // std::cout << "sm_cost: " << smoothness_cost << " time_cost: " << time_of_cost << " colli_pen: " << collision_penalty << " dyn_pen: " << dynamic_penalty << "feas_pen: " << feasibility_penalty << std::endl;
     // cout << "total: " << total_smcost + total_timecost + penalty_cost << endl;
-    if (opt->iter_num_ % 50 == 0) {
+    if (opt->verbose_ && opt->logging_every_n_ > 0 &&
+        opt->iter_num_ % opt->logging_every_n_ == 0) {
       ROS_INFO("[minco_cost] iter=%d smooth=%.3f time=%.3f penalty=%.3f anchor=%.3f total=%.3f",
                opt->iter_num_, total_smcost, total_timecost, penalty_cost,
                anchor_cost,
@@ -310,11 +410,16 @@ namespace plan_manage
     return total_smcost + total_timecost + penalty_cost + anchor_cost;
   }
 
-  int PolyTrajOptimizer::earlyExitCallback(void *func_data, const double *x, const double *g, const double fx, const double xnorm, const double gnorm, const double step, int n, int k, int ls)
+  int PolyTrajOptimizer::progressCallback(void *func_data,
+                                          const Eigen::VectorXd & /*x*/,
+                                          const Eigen::VectorXd & /*g*/,
+                                          double /*fx*/, double /*step*/,
+                                          int /*k*/, int /*ls*/)
   {
     PolyTrajOptimizer *opt = reinterpret_cast<PolyTrajOptimizer *>(func_data);
-
-    return (opt->force_stop_type_ == STOP_FOR_ERROR || opt->force_stop_type_ == STOP_FOR_REBOUND);
+    return (opt->force_stop_type_ == STOP_FOR_ERROR
+            || opt->force_stop_type_ == STOP_FOR_REBOUND
+            || (opt->cancel_checker_ && opt->cancel_checker_()));
   }
 
   /* mappings between real world time and unconstrained virtual time */
@@ -710,13 +815,16 @@ namespace plan_manage
           temp_l_Bl << le(0), -le(1),
                        le(1), le(0);          
 
-          int corr_k = cfgHs[pointid].cols();
-
-          for(int k = 0; k < corr_k; k++)
-          {
-            // outerNormal 就是论文中公式(32)的Az
-            outerNormal = cfgHs[pointid].col(k).head<2>();
-            violaPos = outerNormal.dot(bpt - cfgHs[pointid].col(k).tail<2>());
+          const auto add_static_distance_penalty = [&](const Eigen::Vector2d& obstacle) {
+            const Eigen::Vector2d delta = bpt - obstacle;
+            const double distance_to_obstacle = delta.norm();
+            if (distance_to_obstacle < 1.0e-6) {
+              outerNormal = Eigen::Vector2d(1.0, 0.0);
+            } else {
+              // 距离违例对车辆点位置的梯度为 -delta / ||delta||。
+              outerNormal = -delta / distance_to_obstacle;
+            }
+            violaPos = static_obstacle_clearance_ - distance_to_obstacle;
 
             if(violaPos > 0)
             {
@@ -731,6 +839,29 @@ namespace plan_manage
               gdTs[trajid](i) += omg * wei_obs_ * (violaPosPenaD * gradViolaPt * step + violaPosPena / K);
 
               costs(0) += omg * step * wei_obs_ * violaPosPena; // cost is the same
+            }
+          };
+
+          if (use_safe_corridor_constraints_) {
+            const int corr_k = cfgHs[pointid].cols();
+            for(int k = 0; k < corr_k; k++) {
+              // 凸走廊模式：计算车辆footprint越过半空间边界的代价。
+              outerNormal = cfgHs[pointid].col(k).head<2>();
+              violaPos = outerNormal.dot(bpt - cfgHs[pointid].col(k).tail<2>());
+              if (violaPos > 0) {
+                positiveSmoothedL1(violaPos, violaPosPena, violaPosPenaD);
+                gradViolaPc = beta0 * outerNormal.transpose() +
+                              beta1 * outerNormal.transpose() * (singul_ * temp_l_Bl * z_h0 - ego_R * le * dsigma.transpose() * vel2_reci);
+                gradViolaPt = alpha * outerNormal.transpose() * (dsigma + R_dot * le);
+                jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) += omg * step * wei_obs_ * violaPosPenaD * gradViolaPc;
+                gdTs[trajid](i) += omg * wei_obs_ * (violaPosPenaD * gradViolaPt * step + violaPosPena / K);
+                costs(0) += omg * step * wei_obs_ * violaPosPena;
+              }
+            }
+          } else if (use_associated_obstacle_constraints_) {
+            // 关联点模式：不读取、不构建也不计算任何凸安全走廊代价。
+            for (const auto& obstacle : associated_obstacle_points_container_[trajid][pointid]) {
+              add_static_distance_penalty(obstacle);
             }
           }
         }
@@ -1318,25 +1449,49 @@ namespace plan_manage
 
   void PolyTrajOptimizer::init(ros::NodeHandle& nh)
   {
-      nh_ = nh;
-      nh_.param("optimizing/traj_resolution", traj_resolution_, 8);
-      nh_.param("optimizing/des_traj_resolution", destraj_resolution_, 20);
-      nh_.param("optimizing/wei_sta_obs", wei_obs_, 7000.0);
-      nh_.param("optimizing/wei_dyn_obs", wei_surround_, 7000.0);
-      nh_.param("optimizing/wei_feas", wei_feas_, 1000.0);
-      nh_.param("optimizing/wei_time", wei_time_, 500.0);
-      nh_.param("optimizing/wei_anchor", wei_anchor_, 0.0);
-      nh_.param("optimizing/dyn_obs_clearance", surround_clearance_, 1.0);
-      nh_.param("optimizing/max_vel", max_vel_, 3.0);
-      nh_.param("optimizing/max_acc", max_acc_, 1.5);
-      nh_.param("optimizing/max_cur", max_cur_, 0.523598);
-      nh_.param("optimizing/half_margin", half_margin, 0.25);
+      MincoConfig config;
+      nh.param("optimizing/traj_resolution", config.traj_resolution, config.traj_resolution);
+      nh.param("optimizing/des_traj_resolution", config.destraj_resolution, config.destraj_resolution);
+      nh.param("optimizing/wei_sta_obs", config.wei_obs, config.wei_obs);
+      nh.param("optimizing/wei_dyn_obs", config.wei_surround, config.wei_surround);
+      nh.param("optimizing/wei_feas", config.wei_feas, config.wei_feas);
+      nh.param("optimizing/wei_time", config.wei_time, config.wei_time);
+      nh.param("optimizing/wei_anchor", config.wei_anchor, config.wei_anchor);
+      nh.param("optimizing/dyn_obs_clearance", config.surround_clearance, config.surround_clearance);
+      nh.param("optimizing/max_vel", config.max_vel, config.max_vel);
+      nh.param("optimizing/max_acc", config.max_acc, config.max_acc);
+      nh.param("optimizing/max_cur", config.max_cur, config.max_cur);
+      nh.param("optimizing/half_margin", config.half_margin, config.half_margin);
+      nh.param("vehicle/cars_num", config.cars_num, config.cars_num);
+      nh.param("vehicle/car_id", config.car_id, config.car_id);
+      nh.param("vehicle/car_length", config.car_length, config.car_length);
+      nh.param("vehicle/car_width", config.car_width, config.car_width);
+      nh.param("vehicle/car_d_cr", config.car_d_cr, config.car_d_cr);
+      nh.param("logging/info_every_n", config.logging_every_n,
+               config.logging_every_n);
+      configure(config);
+  }
 
-      nh_.param("vehicle/cars_num", cars_num_, 1);
-      nh_.param("vehicle/car_id", car_id_, 0);
-      nh_.param("vehicle/car_length", car_length_, 0.6);
-      nh_.param("vehicle/car_width", car_width_, 0.6);
-      nh_.param("vehicle/car_d_cr", car_d_cr_, 0.0);
+  void PolyTrajOptimizer::configure(const MincoConfig &config)
+  {
+      traj_resolution_ = config.traj_resolution;
+      destraj_resolution_ = config.destraj_resolution;
+      wei_obs_ = config.wei_obs;
+      wei_surround_ = config.wei_surround;
+      wei_feas_ = config.wei_feas;
+      wei_time_ = config.wei_time;
+      wei_anchor_ = config.wei_anchor;
+      surround_clearance_ = config.surround_clearance;
+      max_vel_ = config.max_vel;
+      max_acc_ = config.max_acc;
+      max_cur_ = config.max_cur;
+      half_margin = config.half_margin;
+      cars_num_ = config.cars_num;
+      car_id_ = config.car_id;
+      car_length_ = config.car_length;
+      car_width_ = config.car_width;
+      car_d_cr_ = config.car_d_cr;
+      logging_every_n_ = std::max(0, config.logging_every_n);
 
       B_h << 0, -1,
              1, 0;
@@ -1353,6 +1508,7 @@ namespace plan_manage
       double half_wid = 0.5 * car_width_;
       double half_len = 0.5 * car_length_;
 
+      lz_set_.clear();
       lz_set_.push_back(Eigen::Vector2d(  half_len,  half_wid));
       lz_set_.push_back(Eigen::Vector2d(- half_len,  half_wid));
       lz_set_.push_back(Eigen::Vector2d(  half_len, -half_wid));

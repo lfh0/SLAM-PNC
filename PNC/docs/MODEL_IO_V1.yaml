@@ -1,0 +1,71 @@
+# 模块二T1冻结的训练/部署模型接口；任何改动均须递增io_version。
+io_version: "bev_route_cnn_v1"
+coordinate_frame: "robot_at_observation_stamp"
+observation_stamp: "t_obs"
+
+temporal_bev:
+  dtype: "float32"
+  layout: "BCHW"
+  shape: ["B", 21, 250, 200]
+  history_offsets_sec: [-0.3, -0.2, -0.1, 0.0]
+  range_m:
+    x: "[-5.0, 20.0)"
+    y: "[-10.0, 10.0)"
+  resolution_m_per_cell: 0.1
+  pixel_mapping:
+    row: "floor((x + 5.0) / 0.1)"
+    column: "floor((y + 10.0) / 0.1)"
+    robot_origin_row_column: [50, 100]
+  channels:
+    - "frame_t_minus_0_3_occupancy"
+    - "frame_t_minus_0_3_height"
+    - "frame_t_minus_0_3_density"
+    - "frame_t_minus_0_3_observed"
+    - "frame_t_minus_0_2_occupancy"
+    - "frame_t_minus_0_2_height"
+    - "frame_t_minus_0_2_density"
+    - "frame_t_minus_0_2_observed"
+    - "frame_t_minus_0_1_occupancy"
+    - "frame_t_minus_0_1_height"
+    - "frame_t_minus_0_1_density"
+    - "frame_t_minus_0_1_observed"
+    - "frame_t_occupancy"
+    - "frame_t_height"
+    - "frame_t_density"
+    - "frame_t_observed"
+    - "route_mask"
+    - "frame_t_minus_0_3_valid_broadcast"
+    - "frame_t_minus_0_2_valid_broadcast"
+    - "frame_t_minus_0_1_valid_broadcast"
+    - "frame_t_valid_broadcast"
+  normalization:
+    occupancy: "0.0 or 1.0"
+    height: "clip(max_obstacle_height_m, 0.0, 2.5) / 2.5"
+    density: "min(log1p(point_count) / log(16.0), 1.0)"
+    observed: "0.0 or 1.0"
+    route_mask: "0.0 or 1.0"
+    frame_valid_broadcast: "1.0 for a valid source frame, otherwise 0.0"
+
+ego_state:
+  dtype: "float32"
+  shape: ["B", 4]
+  fields: ["longitudinal_velocity_mps", "yaw_rate_radps", "longitudinal_acceleration_mps2", "steering_angle_rad"]
+  normalization:
+    longitudinal_velocity_mps: "clip(value, -0.7, 0.7) / 0.7"
+    yaw_rate_radps: "clip(value, -0.5, 0.5) / 0.5"
+    longitudinal_acceleration_mps2: "clip(value, -0.5, 0.5) / 0.5"
+    steering_angle_rad: "clip(value, -0.261799, 0.261799) / 0.261799"
+
+trajectory_target:
+  dtype: "float32"
+  shape: ["B", 15, 3]
+  fields: ["x_m", "y_m", "longitudinal_velocity_mps"]
+  sample_offsets_sec: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0]
+  valid_mask_shape: ["B", 15]
+  semantics: "第i个点表示robot(t_obs)坐标下、t_obs之后对应采样时刻的专家轨迹状态。"
+
+model_contract:
+  architecture: "早期通道融合CNN + Ego State MLP + 非自回归轨迹Decoder"
+  outputs: ["predicted_trajectory"]
+  training_only_targets: ["trajectory_target", "target_valid_mask"]
+  prohibited_default_architectures: ["Transformer", "ConvGRU", "Cross-Attention", "生成式轨迹模型"]

@@ -4,6 +4,8 @@
 #include <Eigen/Eigen>
 #include <ros/ros.h>
 #include <chrono>
+#include <functional>
+#include <string>
 
 #include <plan_utils/traj_container.hpp>
 
@@ -17,6 +19,64 @@ namespace plan_manage
 
   using namespace std;
 
+  // MINCO 核心的显式配置。调用方无需依赖 ROS 参数服务器。
+  struct MincoConfig
+  {
+    int traj_resolution = 8;
+    int destraj_resolution = 20;
+    double wei_obs = 7000.0;
+    double wei_surround = 7000.0;
+    double wei_feas = 1000.0;
+    double wei_time = 500.0;
+    double wei_anchor = 0.0;
+    double surround_clearance = 1.0;
+    double max_vel = 3.0;
+    double max_acc = 1.5;
+    double max_cur = 0.523598;
+    double half_margin = 0.25;
+    int cars_num = 1;
+    int car_id = 0;
+    double car_length = 0.6;
+    double car_width = 0.6;
+    double car_d_cr = 0.0;
+    // 大于0时每隔该次数输出一次代价分解；0表示关闭迭代日志。
+    int logging_every_n = 50;
+  };
+
+  // 单条 MINCO 轨迹的输入。状态矩阵按 [位置, 速度, 加速度] 组织，维度为 2x3。
+  struct MincoRequest
+  {
+    Eigen::MatrixXd initial_state;
+    Eigen::MatrixXd final_state;
+    Eigen::MatrixXd initial_inner_points;
+    double total_time = 0.0;
+    // 默认沿用凸安全走廊约束；关闭时只计算关联静态障碍点的距离代价。
+    bool use_safe_corridor_constraints = true;
+    // 仅在关闭安全走廊时使用；false表示不计算关联静态障碍点距离代价。
+    bool use_associated_obstacle_constraints = false;
+    std::vector<Eigen::MatrixXd> sampled_corridors;
+    // 与约束采样点一一对应；每项保存该采样点关联的占据栅格中心。
+    std::vector<std::vector<Eigen::Vector2d>> associated_obstacle_points;
+    double static_obstacle_clearance = 0.0;
+    Eigen::VectorXd piece_time_ratios;
+    int singular_direction = 1;
+    double start_time = 0.0;
+    double curvature_epsilon = 1.0e-4;
+    std::function<bool()> cancel_checker;
+  };
+
+  struct MincoResult
+  {
+    bool success = false;
+    bool cancelled = false;
+    std::string failure_reason;
+    int iterations = 0;
+    double optimize_time_ms = 0.0;
+    double final_cost = 0.0;
+    int solver_result = 0;
+    plan_utils::Trajectory trajectory;
+  };
+
 
   class PolyTrajOptimizer
   {
@@ -24,7 +84,6 @@ namespace plan_manage
   private:
 
 
-    ros::NodeHandle nh_;
     plan_utils::SurroundTrajData *surround_trajs_{NULL}; // Can not use shared_ptr and no need to free
     std::vector<plan_utils::TrajContainer> swarm_traj_container_;
     std::vector<plan_utils::TrajContainer> swarm_last_traj_container_;
@@ -71,10 +130,22 @@ namespace plan_manage
     std::vector<Eigen::MatrixXd> finState_container;
     std::vector<Eigen::MatrixXd> anchor_points_container;
     std::vector<std::vector<Eigen::MatrixXd>> cfgHs_container;
+    bool use_safe_corridor_constraints_ = true;
+    bool use_associated_obstacle_constraints_ = false;
+    std::vector<std::vector<std::vector<Eigen::Vector2d>>> associated_obstacle_points_container_;
+    double static_obstacle_clearance_ = 0.0;
     std::vector<Eigen::VectorXd> piece_time_ratios_container;
     int trajnum;//轨迹只有一条，所以trajnum = 1
     std::vector<plan_utils::MinJerkOpt> jerkOpt_container;
     std::vector<int> piece_num_container;
+    std::function<bool()> cancel_checker_;
+    bool last_optimization_cancelled_ = false;
+    bool verbose_ = true;
+    int logging_every_n_ = 50;
+    int last_iteration_count_ = 0;
+    double last_optimize_time_ms_ = 0.0;
+    double last_final_cost_ = 0.0;
+    int last_solver_result_ = 0;
 
   public:
     
@@ -83,6 +154,7 @@ namespace plan_manage
 
     /* set variables */
     void init(ros::NodeHandle &nh);
+    void configure(const MincoConfig &config);
     void setSurroundTrajs(plan_utils::SurroundTrajData *surround_trajs_ptr);
     void setSwarmTrajs(std::vector<plan_utils::TrajContainer> &swarm_traj_container, bool ifdynamic);
     void setAllCarsTrajs(plan_utils::TrajContainer& trajectory, int& car_id);
@@ -94,6 +166,19 @@ namespace plan_manage
     inline int get_traj_resolution_() { return traj_resolution_; };
     inline int get_destraj_resolution_() { return destraj_resolution_; };
     inline double getsurroundClearance(void) { return surround_clearance_; }
+    void setCancelChecker(const std::function<bool()>& cancel_checker)
+    {
+      cancel_checker_ = cancel_checker;
+    }
+    inline bool wasLastOptimizationCancelled() const
+    {
+      return last_optimization_cancelled_;
+    }
+    void setVerbose(const bool verbose) { verbose_ = verbose; }
+    inline int lastIterationCount() const { return last_iteration_count_; }
+    inline double lastOptimizeTimeMs() const { return last_optimize_time_ms_; }
+    inline double lastFinalCost() const { return last_final_cost_; }
+    inline int lastSolverResult() const { return last_solver_result_; }
 
     /* main planning API */
     bool OptimizeTrajectory(const std::vector<Eigen::MatrixXd> &iniStates, const std::vector<Eigen::MatrixXd> &finStates,
@@ -101,6 +186,7 @@ namespace plan_manage
                             std::vector<std::vector<Eigen::MatrixXd>> &hPoly_container,
                             const std::vector<Eigen::VectorXd> &pieceTimeRatios,
                             std::vector<int> singuls,double now = ros::Time::now().toSec(),double help_eps = 1.0e-4);
+    MincoResult optimize(const MincoRequest &request);
 
 
     double log_sum_exp(double alpha, Eigen::VectorXd &all_dists, double &exp_sum);
@@ -110,9 +196,10 @@ namespace plan_manage
     /* callbacks by the L-BFGS optimizer */
     static double costFunctionCallback(void *func_data, const Eigen::VectorXd &x, Eigen::VectorXd &grad);
 
-    static int earlyExitCallback(void *func_data, const double *x, const double *g,
-                                 const double fx, const double xnorm, const double gnorm,
-                                 const double step, int n, int k, int ls);
+    static int progressCallback(void *func_data,
+                                const Eigen::VectorXd &x,
+                                const Eigen::VectorXd &g,
+                                double fx, double step, int k, int ls);
 
     /* mappings between real world time and unconstrained virtual time */
     template <typename EIGENVEC>

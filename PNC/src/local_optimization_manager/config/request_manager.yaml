@@ -1,0 +1,20 @@
+candidate_topic: /local_replanner/candidate
+blockage_topic: /local_reference/blockage
+costmap_topic: /local_costmap_node/costmap/costmap
+optimizer_status_topic: /local_optimizer/status
+request_topic: /local_optimizer/request
+
+# 必须高于 local_hybrid_astar 的 occupied_threshold(当前50)：
+# 路径进入高膨胀代价区即取消MINCO并局部重搜，避免雷达代价跳变后变成硬碰撞。
+path_replan_collision_threshold: 80
+unknown_is_obstacle: true
+
+# 同一绕障事件内终点变化超过该距离时拒绝，防止重汇入目标抖动。
+endpoint_change_distance_m: 0.5
+# 归一化采样后的路径横向变化超过该值，才视为实质变化。
+path_change_distance_m: 0.3
+relative_length_change: 0.10
+topology_deadband_m: 0.20
+
+# A*、MINCO、消息传输和控制接管的初始延迟估计。
+predicted_execution_delay_s: 0.15

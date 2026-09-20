@@ -1,0 +1,74 @@
+request_topic: /local_optimizer/request
+costmap_topic: /local_costmap_node/costmap/costmap
+status_topic: /local_optimizer/status
+trajectory_topic: /local_optimizer/candidate_trajectory
+visualization_topic: /local_optimizer/debug_trajectory
+corridor_visualization_topic: /local_optimizer/polyhedrons
+corridor_points_visualization_topic: /local_optimizer/corridor_points
+
+corridor:
+  # 局部轨迹必须受凸安全走廊约束，防止MINCO跨越局部A*通道大幅切弯。
+  use_safe_corridor_constraints: true
+  # 局部A*使用膨胀代价选择绕行方向；MINCO走廊只取致命障碍核心，
+  # 再由下方0.6x0.5m车体与0.1m余量完成一次且仅一次的物理外扩。
+  # 否则将inflation层再次作为硬障碍会导致安全走廊和footprint双重外扩。
+  collision_cost_threshold: 253
+  # local costmap未跟踪未知空间；与LA-03保持一致，避免同一路径在A*可用、
+  # MINCO走廊却因未知栅格被拒绝。
+  unknown_as_occupied: false
+  max_longitudinal: 0.3
+  max_lateral: 0.6
+  # local_costmap分辨率为0.05m，必须允许栅格A*紧凑转角中的单栅格短段。
+  min_seed_length: 0.05
+  max_seed_length: 0.8
+  max_seed_deviation: 0.05
+  max_seed_yaw_error: 0.2
+  min_overlap_area: 0.01
+
+associated_obstacle:
+  # 安全走廊启用时不使用该软距离项，避免与强锚定、动力学约束竞争而造成线搜索失败。
+  enabled: false
+  search_radius_m: 1.5
+  max_points_per_sample: 12
+  # 关联障碍栅格中心到车辆footprint采样点的额外最小距离。
+  clearance_m: 0.08
+
+validation:
+  # 走廊约束之外的发布前保护：轨迹中心不得偏离局部A*折线超过该值。
+  max_reference_deviation_m: 0.35
+  # 与LA-03的footprint_padding_m一致。发布前复检的车体包络为
+  # 0.6 x 0.5 m车体外扩0.1 m，即0.8 x 0.7 m。
+  footprint_margin_m: 0.10
+
+# 与全局MINCO统一；局部只因输入地图范围不同而生成不同走廊。
+vehicle:
+  car_width: 0.5
+  car_length: 0.6
+  car_d_cr: 0.0
+
+optimizing:
+  traj_resolution: 8
+  des_traj_resolution: 12
+  wei_sta_obs: 5000.0
+  wei_dyn_obs: 7000.0
+  wei_feas: 5000.0
+  wei_time: 500.0
+  wei_anchor: 5000.0
+  dyn_obs_clearance: 1.0
+  max_vel: 0.30
+  max_acc: 0.50
+  max_cur: 0.40
+  half_margin: 0.10
+
+initial_time:
+  min_speed: 0.2
+  min_piece_time: 0.2
+  min_turn_speed_ratio: 0.25
+
+# 只影响候选轨迹消息采样密度，与MINCO求解约束无关；和全局validation一致。
+sample_period_s: 0.02
+
+logging:
+  # 每50次代价函数评估输出一次平滑、时间、约束、锚定和总代价。
+  enable_iteration_log: true
+  info_every_n: 50

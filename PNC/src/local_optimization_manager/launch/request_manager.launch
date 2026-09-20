@@ -1,0 +1,9 @@
+<launch>
+  <node pkg="local_optimization_manager"
+        type="local_optimization_manager_node"
+        name="local_optimization_manager"
+        output="screen">
+    <rosparam command="load"
+              file="$(find local_optimization_manager)/config/request_manager.yaml" />
+  </node>
+</launch>

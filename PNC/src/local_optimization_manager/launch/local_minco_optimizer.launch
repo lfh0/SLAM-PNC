@@ -1,0 +1,9 @@
+<launch>
+  <node pkg="local_optimization_manager"
+        type="local_minco_optimizer_node"
+        name="local_minco_optimizer"
+        output="screen">
+    <rosparam command="load"
+              file="$(find local_optimization_manager)/config/local_minco_optimizer.yaml" />
+  </node>
+</launch>

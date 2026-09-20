@@ -70,6 +70,7 @@ catkin_package(
     INCLUDE_DIRS include ${THIRD_PARTY_INCLUDE_DIRS}
     ${CMAKE_CURRENT_BINARY_DIR}
     ${PLAN_UTILS_INCLUDE_DIRS}
+    LIBRARIES minco_core
     CATKIN_DEPENDS controller decomp_ros_utils robot_trajectory_msgs #mpc 
     # traj_server_ros
 )
@@ -82,10 +83,20 @@ link_directories(
 )
 
 
+add_library(minco_core src/traj_opt/Minco.cpp)
+target_link_libraries(minco_core ${catkin_LIBRARIES})
+add_dependencies(minco_core ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 add_executable(traj_opt 
     src/app/Trajopt_Server.cpp
-    src/traj_opt/Minco.cpp
     ${PROTO_SRCS}
 )
-target_link_libraries(traj_opt ${catkin_LIBRARIES} yaml-cpp ${Protobuf_LIBRARIES})
+target_link_libraries(traj_opt minco_core ${catkin_LIBRARIES} yaml-cpp ${Protobuf_LIBRARIES})
 add_dependencies(traj_opt ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_minco_core test/test_minco_core.cpp)
+  if(TARGET test_minco_core)
+    target_link_libraries(test_minco_core minco_core ${catkin_LIBRARIES})
+  endif()
+endif()

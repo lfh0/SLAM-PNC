@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>local_optimization_manager</name>
+  <version>0.1.0</version>
+  <description>LA-04局部A*候选筛选与MINCO请求管理。</description>
+  <maintainer email="maintainer@example.com">maintainer</maintainer>
+  <license>BSD</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>decomp_ros_utils</depend>
+  <depend>decomp_ros_msgs</depend>
+  <depend>nav_msgs</depend>
+  <exec_depend>local_hybrid_astar</exec_depend>
+  <exec_depend>local_obstacle_monitor</exec_depend>
+  <exec_depend>local_reference_manager</exec_depend>
+  <depend>robot_trajectory_msgs</depend>
+  <depend>roscpp</depend>
+  <depend>std_msgs</depend>
+  <depend>tf2</depend>
+  <depend>trajopt</depend>
+  <depend>visualization_msgs</depend>
+</package>

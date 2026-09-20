@@ -31,8 +31,8 @@ local_costmap_node:
     update_frequency: 10.0
     publish_frequency: 5.0
     rolling_window: true
-    width: 12.0
-    height: 12.0
+    width: 25.0
+    height: 25.0
     resolution: 0.05
     track_unknown_space: false
     robot_radius: 0.3
@@ -59,5 +59,8 @@ local_costmap_node:
 
     inflation_layer:
       enabled: true
-      inflation_radius: 0.8
-      cost_scaling_factor: 2.0
+      # 局部A*仍以膨胀层选取绕障拓扑：1.0m范围包含车辆外接半径和额外缓冲。
+      # 较快衰减使外缘保留低代价缓冲带，避免原2.0时50/80/90阈值把整圈膨胀区
+      # 都二值化为障碍。
+      inflation_radius: 1.0
+      cost_scaling_factor: 5.0

@@ -1,0 +1,8 @@
+<launch>
+  <!-- LA-01至局部MINCO请求门控的独立验收链路；不接管F3/F5/MPC。 -->
+  <include file="$(find local_reference_manager)/launch/local_reference_manager.launch" />
+  <include file="$(find local_obstacle_monitor)/launch/local_obstacle_monitor.launch" />
+  <include file="$(find local_hybrid_astar)/launch/local_hybrid_astar.launch" />
+  <include file="$(find local_optimization_manager)/launch/request_manager.launch" />
+  <include file="$(find local_optimization_manager)/launch/local_minco_optimizer.launch" />
+</launch>
